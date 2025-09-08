@@ -8,7 +8,7 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-app.use('/availability', availabilityRouter);
+app.use('/api/availability', availabilityRouter);
 
 // For Vercel serverless
 if (process.env.NODE_ENV === 'production') {
