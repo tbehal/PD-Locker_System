@@ -19,7 +19,7 @@ const SearchCriteriaForm = ({ criteria, onInputChange, onSearch, isLoading }) =>
         <div>
             <label htmlFor="endWeek" className="block text-sm font-medium text-gray-700">End Week</label>
             <select id="endWeek" name="endWeek" value={criteria.endWeek} onChange={onInputChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                {Array.from({ length: 12 - (criteria.startWeek || 1) + 1 }, (_, i) => (criteria.startWeek || 1) + i).map(week => <option key={`end-${week}`} value={week}>{week}</option>)}
+                {Array.from({ length: 12 - criteria.startWeek + 1 }, (_, i) => criteria.startWeek + i).map(week => <option key={`end-${week}`} value={week}>{week}</option>)}
             </select>
         </div>
         <div>
@@ -129,7 +129,24 @@ export default function AvailabilityFinder() {
 
     const handleInputChange = (e) => {
         const { name, value, type } = e.target;
-        setSearchCriteria(prev => ({ ...prev, [name]: type === 'number' ? parseInt(value, 10) : value }));
+        const newValue = type === 'number' ? parseInt(value, 10) : value;
+        
+        setSearchCriteria(prev => {
+            const updated = { ...prev, [name]: newValue };
+            
+            // If startWeek changed, ensure endWeek is valid
+            if (name === 'startWeek') {
+                const startWeek = newValue;
+                const endWeek = prev.endWeek;
+                
+                // If endWeek is less than startWeek, set it to startWeek
+                if (endWeek < startWeek) {
+                    updated.endWeek = startWeek;
+                }
+            }
+            
+            return updated;
+        });
     };
 
     const handleSearch = useCallback(async () => {

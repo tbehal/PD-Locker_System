@@ -10,11 +10,15 @@
   },
   "scripts": {
     "start": "vite",
-    "build": "vite build"
+    "build": "vite build",
+    "preview": "vite preview",
+    "deploy": "npm run build && gh-pages -d dist"
   },
+  "homepage": "https://sjoshi-pd.github.io/NDECCSchedApp",
   "devDependencies": {
-    "tailwindcss": "^3.3.3",
+    "autoprefixer": "^10.4.14",
+    "gh-pages": "^6.3.0",
     "postcss": "^8.4.27",
-    "autoprefixer": "^10.4.14"
+    "tailwindcss": "^3.3.3"
   }
 }
