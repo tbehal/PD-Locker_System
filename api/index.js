@@ -10,6 +10,10 @@ app.use(express.json());
 app.get('/health', (_req, res) => {
   res.json({ status: 'OK', message: 'Backend is running' });
 });
+// Alias for Vercel function path
+app.get('/api/health', (_req, res) => {
+  res.json({ status: 'OK', message: 'Backend is running' });
+});
 
 // Test route
 app.get('/test', (_req, res) => {
@@ -29,6 +33,8 @@ app.post('/debug', (req, res) => {
 try {
   const availabilityRouter = require('./backend/routes/availability');
   app.use('/availability', availabilityRouter);
+  // Alias for Vercel function path
+  app.use('/api/availability', availabilityRouter);
   console.log('✅ Availability routes loaded successfully');
 } catch (error) {
   console.log('❌ Error loading availability routes:', error.message);
