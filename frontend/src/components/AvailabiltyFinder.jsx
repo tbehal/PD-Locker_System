@@ -19,7 +19,11 @@ const SearchCriteriaForm = ({ criteria, onInputChange, onSearch, isLoading }) =>
         <div>
             <label htmlFor="endWeek" className="block text-sm font-medium text-gray-700">End Week</label>
             <select id="endWeek" name="endWeek" value={criteria.endWeek} onChange={onInputChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                {Array.from({ length: 12 - criteria.startWeek + 1 }, (_, i) => criteria.startWeek + i).map(week => <option key={`end-${week}`} value={week}>{week}</option>)}
+                {Array.from({ length: 12 }, (_, i) => i + 1).map(week => (
+                    <option key={`end-${week}`} value={week} disabled={week < criteria.startWeek}>
+                        {week} {week < criteria.startWeek ? '(Invalid)' : ''}
+                    </option>
+                ))}
             </select>
         </div>
         <div>
@@ -134,15 +138,16 @@ export default function AvailabilityFinder() {
         setSearchCriteria(prev => {
             const updated = { ...prev, [name]: newValue };
             
-            // If startWeek changed, ensure endWeek is valid
+            // If startWeek changed, only adjust endWeek if it becomes invalid
             if (name === 'startWeek') {
                 const startWeek = newValue;
                 const endWeek = prev.endWeek;
                 
-                // If endWeek is less than startWeek, set it to startWeek
+                // Only change endWeek if it's now less than startWeek
                 if (endWeek < startWeek) {
                     updated.endWeek = startWeek;
                 }
+                // If endWeek is still valid (>= startWeek), keep it unchanged
             }
             
             return updated;
