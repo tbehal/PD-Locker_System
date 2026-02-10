@@ -22,8 +22,8 @@ export { sendPaymentLink, sendExtensionPaymentLink } from './payments.api'
 export type { PaymentLinkSentResponse, SendPaymentLinkData, SendExtensionPaymentLinkData } from './payments.api'
 
 // Students Module
-export { createStudent, validateStudent } from './students.api'
-export type { CreateStudentData } from './students.api'
+export { createStudent, validateStudent, searchStudents } from './students.api'
+export type { CreateStudentData, StudentSearchResult } from './students.api'
 
 // Auth Module
 export { adminLogin, adminLogout, verifyAdmin } from './auth.api'
