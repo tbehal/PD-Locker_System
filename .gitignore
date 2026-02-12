@@ -48,6 +48,6 @@ nul
 next-env.d.ts
 
 # database
-*.db
+# *.db
 *.db-wal
 *.db-shm
