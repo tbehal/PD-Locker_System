@@ -1,39 +1,100 @@
 /**
  * Shared Email Service
  * Handles all email sending functionality
+ * Supports AWS SES SDK (primary) and SMTP via Nodemailer (fallback)
  */
 import nodemailer from 'nodemailer'
 import type { Transporter } from 'nodemailer'
+import { SESv2Client, SendEmailCommand } from '@aws-sdk/client-sesv2'
 import { format } from 'date-fns'
 
-let transporter: Transporter | null = null
+type EmailTransportType = 'ses' | 'smtp' | 'none'
 
-function getTransporter(): Transporter | null {
-  if (transporter) {
-    return transporter
+let smtpTransporter: Transporter | null = null
+let sesClient: SESv2Client | null = null
+let transportType: EmailTransportType = 'none'
+let transportInitialized = false
+
+function initTransport(): void {
+  if (transportInitialized) return
+  transportInitialized = true
+
+  // Priority 1: AWS SES SDK (uses IAM credentials directly)
+  const accessKey = process.env.ACCESS_KEY
+  const secretKey = process.env.SECRET_ACCESS_KEY
+  const region = process.env.AWS_REGION || 'us-east-1'
+
+  if (accessKey && secretKey) {
+    sesClient = new SESv2Client({
+      region,
+      credentials: {
+        accessKeyId: accessKey,
+        secretAccessKey: secretKey,
+      },
+    })
+    transportType = 'ses'
+    console.log(`[Email Service] Using AWS SES SDK transport (region: ${region})`)
+    return
   }
 
+  // Priority 2: SMTP transport
   const host = process.env.SMTP_HOST
   const port = parseInt(process.env.SMTP_PORT || '587', 10)
   const user = process.env.SMTP_USER
   const pass = process.env.SMTP_PASS
 
-  if (!host || !user || !pass) {
-    console.log('SMTP not configured, email sending disabled')
-    return null
+  if (host && user && pass) {
+    smtpTransporter = nodemailer.createTransport({
+      host,
+      port,
+      secure: port === 465,
+      auth: { user, pass },
+    })
+    transportType = 'smtp'
+    console.log('[Email Service] Using SMTP transport')
+    return
   }
 
-  transporter = nodemailer.createTransport({
-    host,
-    port,
-    secure: port === 465,
-    auth: {
-      user,
-      pass,
-    },
-  })
+  console.log('[Email Service] No email transport configured (need AWS credentials or SMTP credentials)')
+}
 
-  return transporter
+interface SendMailOptions {
+  from: string
+  to: string
+  subject: string
+  html: string
+  text: string
+}
+
+async function sendMail(options: SendMailOptions): Promise<boolean> {
+  initTransport()
+
+  if (transportType === 'ses' && sesClient) {
+    console.log(`[Email Service] Sending via SES: from=${options.from} to=${options.to} subject="${options.subject}"`)
+    const command = new SendEmailCommand({
+      FromEmailAddress: options.from,
+      Destination: { ToAddresses: [options.to] },
+      Content: {
+        Simple: {
+          Subject: { Data: options.subject, Charset: 'UTF-8' },
+          Body: {
+            Html: { Data: options.html, Charset: 'UTF-8' },
+            Text: { Data: options.text, Charset: 'UTF-8' },
+          },
+        },
+      },
+    })
+    const result = await sesClient.send(command)
+    console.log(`[Email Service] SES response: MessageId=${result.MessageId}, status=${result.$metadata.httpStatusCode}`)
+    return true
+  }
+
+  if (transportType === 'smtp' && smtpTransporter) {
+    await smtpTransporter.sendMail(options)
+    return true
+  }
+
+  return false
 }
 
 function getFromEmail(): string {
@@ -51,8 +112,8 @@ interface PaymentLinkEmailParams {
 }
 
 export async function sendPaymentLinkEmail(params: PaymentLinkEmailParams): Promise<boolean> {
-  const transport = getTransporter()
-  if (!transport) return false
+  initTransport()
+  if (transportType === 'none') return false
 
   const formattedStartDate = format(new Date(params.startDate), 'MMMM d, yyyy')
   const formattedEndDate = format(new Date(params.endDate), 'MMMM d, yyyy')
@@ -135,7 +196,7 @@ Prep Doctors - Medical Education Center
 `
 
   try {
-    await transport.sendMail({
+    await sendMail({
       from: getFromEmail(),
       to: params.to,
       subject: 'Complete Your Locker Reservation - Prep Doctors',
@@ -158,8 +219,8 @@ interface WelcomeEmailParams {
 }
 
 export async function sendWelcomeEmail(params: WelcomeEmailParams): Promise<boolean> {
-  const transport = getTransporter()
-  if (!transport) return false
+  initTransport()
+  if (transportType === 'none') return false
 
   const formattedStartDate = format(new Date(params.startDate), 'MMMM d, yyyy')
   const formattedEndDate = format(new Date(params.endDate), 'MMMM d, yyyy')
@@ -235,7 +296,7 @@ Prep Doctors - Medical Education Center
 `
 
   try {
-    await transport.sendMail({
+    await sendMail({
       from: getFromEmail(),
       to: params.to,
       subject: 'Your Locker is Ready! - Prep Doctors',
@@ -257,8 +318,8 @@ interface ExpiryReminderEmailParams {
 }
 
 export async function sendExpiryReminderEmail(params: ExpiryReminderEmailParams): Promise<boolean> {
-  const transport = getTransporter()
-  if (!transport) return false
+  initTransport()
+  if (transportType === 'none') return false
 
   const formattedEndDate = format(new Date(params.endDate), 'MMMM d, yyyy')
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4173'
@@ -333,7 +394,7 @@ Prep Doctors - Medical Education Center
 `
 
   try {
-    await transport.sendMail({
+    await sendMail({
       from: getFromEmail(),
       to: params.to,
       subject: 'Your Locker Rental Ends Tomorrow - Prep Doctors',
@@ -355,8 +416,8 @@ interface AdminLockerAvailableParams {
 }
 
 export async function sendAdminLockerAvailableEmail(params: AdminLockerAvailableParams): Promise<boolean> {
-  const transport = getTransporter()
-  if (!transport) return false
+  initTransport()
+  if (transportType === 'none') return false
 
   const adminEmail = process.env.ADMIN_EMAIL
   if (!adminEmail) {
@@ -434,7 +495,7 @@ Prep Doctors - Locker Management System
 `
 
   try {
-    await transport.sendMail({
+    await sendMail({
       from: getFromEmail(),
       to: adminEmail,
       subject: `Locker #${params.lockerNumber} Now Available - ${params.waitlistCount} on Waitlist`,
@@ -459,8 +520,8 @@ interface KeyDepositRefundParams {
 }
 
 export async function sendKeyDepositRefundEmail(params: KeyDepositRefundParams): Promise<boolean> {
-  const transport = getTransporter()
-  if (!transport) return false
+  initTransport()
+  if (transportType === 'none') return false
 
   const adminEmail = process.env.ADMIN_EMAIL
   if (!adminEmail) {
@@ -536,7 +597,7 @@ Prep Doctors - Locker Management System
 `
 
   try {
-    await transport.sendMail({
+    await sendMail({
       from: getFromEmail(),
       to: adminEmail,
       subject: `Key Deposit Refund Request - Locker #${params.lockerNumber} - ${params.studentName}`,

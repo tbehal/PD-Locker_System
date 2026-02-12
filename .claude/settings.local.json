@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run install:all:*)",
+      "Bash(npm install:*)",
+      "Bash(node -e:*)",
+      "Bash(curl:*)",
+      "Bash(npm uninstall:*)",
+      "WebFetch(domain:nodemailer.com)",
+      "Bash(npx tsx:*)",
+      "Bash(taskkill:*)",
+      "Bash(powershell -Command:*)"
+    ]
+  }
+}
