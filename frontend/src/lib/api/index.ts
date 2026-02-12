@@ -29,7 +29,7 @@ export type { CreateStudentData, StudentSearchResult } from './students.api'
 export { adminLogin, adminLogout, verifyAdmin } from './auth.api'
 
 // Rentals Module
-export { fetchRentals, fetchAnalytics } from './rentals.api'
+export { fetchRentals, fetchAnalytics, requestDepositRefund } from './rentals.api'
 
 // Waitlist Module
 export { fetchWaitlist, addToWaitlist, updateWaitlistEntry, deleteWaitlistEntry } from './waitlist.api'

@@ -8,6 +8,7 @@ import {
   adminLogout,
   fetchRentals,
   fetchAnalytics,
+  requestDepositRefund,
   fetchWaitlist,
   addToWaitlist,
   updateWaitlistEntry,
@@ -40,6 +41,9 @@ export default function AdminDashboardPage() {
   // Extension modal state
   const [extendingRental, setExtendingRental] = useState<RentalRecord | null>(null)
 
+  // Refund modal state
+  const [refundingRental, setRefundingRental] = useState<RentalRecord | null>(null)
+
   // ARIA IDs for tabs and modals
   const tabBookId = useId()
   const tabRentalsId = useId()
@@ -48,6 +52,7 @@ export default function AdminDashboardPage() {
   const tabPanelRentalsId = useId()
   const tabPanelWaitlistId = useId()
   const deleteModalTitleId = useId()
+  const refundModalTitleId = useId()
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -136,6 +141,13 @@ export default function AdminDashboardPage() {
       await loadWaitlist()
     }
     setDeletingEntry(null)
+  }
+
+  const confirmRefund = async () => {
+    if (!refundingRental) return
+
+    await requestDepositRefund(refundingRental.id)
+    setRefundingRental(null)
   }
 
   const handleFormSubmit = async (data: CreateWaitlistData | UpdateWaitlistData) => {
@@ -337,7 +349,7 @@ export default function AdminDashboardPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <RentalTable rentals={rentals} onExtend={(rental) => setExtendingRental(rental)} />
+                <RentalTable rentals={rentals} onExtend={(rental) => setExtendingRental(rental)} onRefund={(rental) => setRefundingRental(rental)} />
               </CardContent>
             </Card>
           </div>
@@ -426,6 +438,44 @@ export default function AdminDashboardPage() {
                 className="flex-1 bg-red-600 hover:bg-red-700"
               >
                 Delete
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Refund Confirmation Modal */}
+      {refundingRental && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={refundModalTitleId}
+        >
+          <div
+            className="fixed inset-0 bg-black/50"
+            onClick={() => setRefundingRental(null)}
+            aria-hidden="true"
+          />
+          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-sm mx-4 p-6">
+            <h3 id={refundModalTitleId} className="text-lg font-semibold text-gray-900 mb-2">Request Key Deposit Refund</h3>
+            <p className="text-gray-600 mb-6">
+              Send a refund request for <strong>{refundingRental.studentName}</strong>'s $50 key deposit? (Locker #{refundingRental.lockerNumber})
+            </p>
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setRefundingRental(null)}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={confirmRefund}
+                className="flex-1"
+              >
+                Send Request
               </Button>
             </div>
           </div>

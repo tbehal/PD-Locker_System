@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { randomUUID } from 'crypto'
 import { getStripe, STRIPE_CONFIG } from './stripe.service.js'
 import { isLockerAvailableForRange, isLockerAvailableForRangeExcluding, getLockerById } from '../lockers/index.js'
-import { createReservation, updateReservationByStripeSessionId, getReservationByStripeSessionId, getReservationById } from '../rentals/index.js'
+import { createReservation, updateReservationByStripeSessionId, updateReservation, getReservationByStripeSessionId, getReservationById, linkReservationToStudent } from '../rentals/index.js'
 import { removeFromWaitlistByEmail, getWaitlistCount } from '../waitlist/index.js'
 import { validateBody, paymentLimiter, stripeWebhookLimiter } from '../../shared/middleware/index.js'
 import { sendPaymentLinkEmail, sendWelcomeEmail, sendAdminLockerAvailableEmail } from '../../shared/services/index.js'
@@ -361,37 +361,59 @@ router.post('/webhook', stripeWebhookLimiter, async (req: Request, res: Response
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session
+        const metadata = session.metadata
 
-        // Activate the reservation
+        // Activate the extension/reservation
         updateReservationByStripeSessionId(session.id, {
           status: 'active',
           stripePaymentIntentId: session.payment_intent as string | undefined,
           stripeCustomerId: session.customer as string | undefined,
         })
 
-        // Send welcome email
-        const metadata = session.metadata
-        if (metadata?.studentEmail && metadata?.studentName) {
+        // Link student to reservation
+        if (metadata?.studentDbId) {
           const reservation = getReservationByStripeSessionId(session.id)
           if (reservation) {
-            sendWelcomeEmail({
-              to: metadata.studentEmail,
-              studentName: metadata.studentName,
-              lockerNumber: metadata.lockerNumber || 'N/A',
-              startDate: reservation.startDate,
-              endDate: reservation.endDate,
-            }).catch(err => {
-              console.error('[Payments Module] Failed to send welcome email:', err)
-            })
+            linkReservationToStudent(reservation.id, metadata.studentDbId)
           }
         }
 
-        // Auto-remove from waitlist on successful payment
-        const customerEmail = session.customer_details?.email || metadata?.studentEmail
-        if (customerEmail) {
-          const removed = removeFromWaitlistByEmail(customerEmail)
-          if (removed) {
-            console.log(`[Payments Module] Removed ${customerEmail} from waitlist after successful payment`)
+        // Handle extension: update the original rental's end date and total amount
+        if (metadata?.isExtension === 'true' && metadata?.originalSubscriptionId) {
+          const originalRental = getReservationById(metadata.originalSubscriptionId)
+          const extensionReservation = getReservationByStripeSessionId(session.id)
+
+          if (originalRental && extensionReservation) {
+            updateReservation(originalRental.id, {
+              endDate: extensionReservation.endDate,
+              totalAmount: originalRental.totalAmount + extensionReservation.totalAmount,
+            })
+            console.log(`[Payments Module] Extended rental ${originalRental.id} end date to ${extensionReservation.endDate}`)
+          }
+        } else {
+          // Send welcome email only for initial rentals (not extensions)
+          if (metadata?.studentEmail && metadata?.studentName) {
+            const reservation = getReservationByStripeSessionId(session.id)
+            if (reservation) {
+              sendWelcomeEmail({
+                to: metadata.studentEmail,
+                studentName: metadata.studentName,
+                lockerNumber: metadata.lockerNumber || 'N/A',
+                startDate: reservation.startDate,
+                endDate: reservation.endDate,
+              }).catch(err => {
+                console.error('[Payments Module] Failed to send welcome email:', err)
+              })
+            }
+          }
+
+          // Auto-remove from waitlist only for initial rentals
+          const customerEmail = session.customer_details?.email || metadata?.studentEmail
+          if (customerEmail) {
+            const removed = removeFromWaitlistByEmail(customerEmail)
+            if (removed) {
+              console.log(`[Payments Module] Removed ${customerEmail} from waitlist after successful payment`)
+            }
           }
         }
         break
@@ -439,7 +461,7 @@ router.post(
   async (req: Request, res: Response<ApiResponse<PortalSessionResponse>>) => {
     try {
       const { customerId } = req.body
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173'
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4173'
 
       const stripe = getStripe()
       const session = await stripe.billingPortal.sessions.create({

@@ -166,6 +166,16 @@ export function updateReservation(
     values.push(params.stripeCustomerId)
   }
 
+  if (params.endDate !== undefined) {
+    updates.push('end_date = ?')
+    values.push(params.endDate)
+  }
+
+  if (params.totalAmount !== undefined) {
+    updates.push('total_amount = ?')
+    values.push(params.totalAmount)
+  }
+
   if (updates.length === 0) {
     return getReservationById(reservationId)
   }

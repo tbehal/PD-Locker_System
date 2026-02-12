@@ -46,6 +46,8 @@ export interface UpdateReservationParams {
   status?: string
   stripePaymentIntentId?: string
   stripeCustomerId?: string
+  endDate?: string
+  totalAmount?: number
 }
 
 export interface RentalRecord {

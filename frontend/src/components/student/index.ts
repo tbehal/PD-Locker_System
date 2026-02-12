@@ -1,0 +1,1 @@
+export { StudentInfoForm } from './StudentInfoForm'

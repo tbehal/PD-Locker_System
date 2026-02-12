@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+/* Prep Doctors Brand Theme - Tailwind v4 */
+@theme {
+  /* Brand Colors */
+  --color-brand-primary: #0660B2;
+  --color-brand-secondary: #0362B2;
+  --color-brand-primary-hover: #054d8e;
+  --color-brand-secondary-hover: #024d8e;
+
+  /* Custom colors for easier access */
+  --color-primary: #0660B2;
+  --color-secondary: #0362B2;
+
+  /* Custom grid for locker layout (14 columns) */
+  --grid-cols-14: repeat(14, minmax(0, 1fr));
+
+  /* Custom spacing */
+  --shadow-card: 0 0 2px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.24);
+  --shadow-elevated: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+  --brand-primary: #0660B2;
+  --brand-secondary: #0362B2;
+  --card-shadow: 0 0 2px rgba(0,0,0,.12), 0 2px 4px rgba(0,0,0,.24);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: 'Karla', Arial, Helvetica, sans-serif;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Source Sans 3', Arial, Helvetica, sans-serif;
+}
+
+/* Utility class for 14-column grid (locker layout) */
+.grid-cols-14 {
+  grid-template-columns: repeat(14, minmax(0, 1fr));
+}
+
+/* Brand color utilities */
+.text-brand-primary {
+  color: var(--color-brand-primary);
+}
+
+.text-brand-secondary {
+  color: var(--color-brand-secondary);
+}
+
+.bg-brand-primary {
+  background-color: var(--color-brand-primary);
+}
+
+.bg-brand-secondary {
+  background-color: var(--color-brand-secondary);
+}
+
+.border-brand-primary {
+  border-color: var(--color-brand-primary);
+}
+
+.border-brand-secondary {
+  border-color: var(--color-brand-secondary);
+}
+
+/* Hover states */
+.hover\:bg-brand-primary-hover:hover {
+  background-color: var(--color-brand-primary-hover);
+}
+
+.hover\:bg-brand-secondary-hover:hover {
+  background-color: var(--color-brand-secondary-hover);
+}

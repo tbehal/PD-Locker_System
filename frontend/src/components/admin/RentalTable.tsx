@@ -5,6 +5,7 @@ import type { RentalRecord } from '@/types'
 interface RentalTableProps {
   rentals: RentalRecord[]
   onExtend?: (rental: RentalRecord) => void
+  onRefund?: (rental: RentalRecord) => void
 }
 
 function getStatusVariant(status: string): 'success' | 'warning' | 'danger' | 'default' {
@@ -21,7 +22,7 @@ function getStatusVariant(status: string): 'success' | 'warning' | 'danger' | 'd
   }
 }
 
-export function RentalTable({ rentals, onExtend }: RentalTableProps) {
+export function RentalTable({ rentals, onExtend, onRefund }: RentalTableProps) {
   if (rentals.length === 0) {
     return (
       <div className="text-center py-12 text-gray-500">
@@ -50,7 +51,7 @@ export function RentalTable({ rentals, onExtend }: RentalTableProps) {
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               Amount
             </th>
-            {onExtend && (
+            {(onExtend || onRefund) && (
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Actions
               </th>
@@ -81,16 +82,29 @@ export function RentalTable({ rentals, onExtend }: RentalTableProps) {
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                 ${(rental.totalAmount / 100).toFixed(2)}
               </td>
-              {onExtend && (
+              {(onExtend || onRefund) && (
                 <td className="px-6 py-4 whitespace-nowrap">
                   {rental.status === 'active' && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => onExtend(rental)}
-                    >
-                      Extend
-                    </Button>
+                    <div className="flex gap-2">
+                      {onExtend && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onExtend(rental)}
+                        >
+                          Extend
+                        </Button>
+                      )}
+                      {onRefund && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onRefund(rental)}
+                        >
+                          Refund Deposit
+                        </Button>
+                      )}
+                    </div>
                   )}
                 </td>
               )}
