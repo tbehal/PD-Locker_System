@@ -1,6 +1,134 @@
 
 # Changelog
 
+## v2.3.0 — Backend Architecture Overhaul (2026-02-24)
+
+Extracted service layer, added Joi schema validation, standardized API response envelope, added global error handler, and versioned all protected endpoints under `/api/v1/`.
+
+### New Architecture
+
+```
+Routes (thin adapters) → Services (business logic) → Prisma (DB)
+                        ↑                            ↑
+              Joi validation middleware     AppError thrown on failures
+                        ↓
+              Global errorHandler catches all errors
+```
+
+### New Files
+
+| File | Purpose |
+|------|---------|
+| `src/lib/AppError.js` | Custom error class with statusCode, message, details |
+| `src/middleware/validate.js` | Joi validation middleware (bracket notation for array paths) |
+| `src/middleware/errorHandler.js` | Global error handler — AppError + Prisma P2025/P2002/P2003 |
+| `src/middleware/respond.js` | Response envelope helpers: `ok()`, `list()`, `created()` |
+| `src/schemas/cycles.js` | Joi schemas for all cycle endpoints |
+| `src/schemas/bookings.js` | Joi schemas for book/unbook/find/reset |
+| `src/schemas/grid.js` | Joi schemas for grid + export |
+| `src/schemas/contacts.js` | Joi schemas for contact search/details/payment |
+| `src/schemas/registration.js` | Joi schemas for registration list + export |
+| `src/services/cycleService.js` | Cycle CRUD business logic (create, lock, delete with transaction) |
+| `src/services/bookingService.js` | Booking logic (book with P2002 race handling, unbook, find, reset) |
+| `src/services/gridService.js` | Grid builder + CSV export (parallel DB queries) |
+| `src/services/registrationService.js` | Registration list + CSV export from HubSpot |
+| `__tests__/validation.test.js` | 7 tests for Joi validation + error handler |
+
+### Modified Files
+
+| File | What Changed |
+|------|-------------|
+| `src/app.js` | v1 Router groups all protected routes under `/api/v1/`, errorHandler mounted last |
+| `src/hubspot.js` | Removed redundant `dotenv.config()`, uses `config.hubspotApiKey` |
+| `src/routes/cycles.js` | Rewritten as thin adapter: validate → service → respond |
+| `src/routes/bookings.js` | Rewritten as thin adapter with Joi validation |
+| `src/routes/grid.js` | Rewritten as thin adapter, CSV stays without envelope |
+| `src/routes/contacts.js` | Added Joi validation including payment status body |
+| `src/routes/registration.js` | Full refactor: Joi params/query validation, service calls |
+| `frontend/src/api.js` | All paths → `/api/v1/`, envelope unwrap (`res.data.data`), auth stays `/api/auth/` |
+
+### API Response Envelope
+
+All JSON responses now follow a standard envelope:
+
+```json
+// Success (single)
+{ "data": { ... }, "message": "Success" }
+
+// Success (list)
+{ "data": [ ... ], "count": 42, "message": "Fetched" }
+
+// Error
+{ "error": "Validation failed.", "details": { "year": "year is required" } }
+```
+
+### API Versioning
+
+- All protected routes moved to `/api/v1/` prefix
+- Auth routes stay at `/api/auth/` (unversioned)
+- Health check stays at `/api/health` (unversioned)
+
+### Key Improvements
+
+- **Transactions:** `deleteCycle` and `updateWeeks` wrapped in `prisma.$transaction()`
+- **Race condition handling:** `bookSlots` catches Prisma P2002 (unique constraint) → friendly 409
+- **Lock/unlock safety:** Checks cycle existence before update (404 instead of Prisma crash)
+- **Grid parallel queries:** Station + cycle queries run via `Promise.all`
+- **Cross-field validation:** `startWeek <= endWeek` enforced in Joi find schema
+
+### Tests
+
+18 backend tests pass (11 existing + 7 new validation tests). 6 frontend tests pass.
+
+---
+
+## v2.2.0 — Security Hardening (2026-02-24)
+
+Added authentication, CORS lockdown, security headers, rate limiting, input sanitization, and error message leak fixes. All items from Remediation Plan Phase 1.
+
+### New Files
+
+| File | Purpose |
+|------|---------|
+| `src/middleware/auth.js` | JWT authentication via HttpOnly cookies (`requireAuth` middleware) |
+| `src/routes/auth.js` | Login, logout, auth check endpoints (`/api/auth/*`) |
+| `frontend/src/components/LoginPage.jsx` | Password login form with session persistence |
+
+### Modified Files
+
+| File | What Changed |
+|------|-------------|
+| `src/app.js` | Helmet, CORS with `ALLOWED_ORIGINS`, rate limiting (300/15min + 30/min HubSpot), cookie-parser, auth routes mounted |
+| `src/config.js` | Added `jwtSecret`, `adminPasswordHash`, `nodeEnv`. Production env var validation with `process.exit(1)` |
+| `frontend/src/config.js` | Removed `window.__API_BASE__` XSS vector |
+| `frontend/src/App.jsx` | Added auth state, login page, 401 interceptor auto-logout |
+| `frontend/src/api.js` | Added `login()`, `logout()`, `checkAuth()` functions |
+| `.gitignore` | Added `*.db`, `*.db-shm`, `*.db-wal` |
+
+### Security Measures
+
+| Measure | Implementation |
+|---------|---------------|
+| Authentication | JWT in HttpOnly cookies, 8-hour expiry |
+| CORS | Restricted to `ALLOWED_ORIGINS` env var (comma-separated) |
+| Security Headers | Helmet middleware (CSP, HSTS, X-Frame-Options, etc.) |
+| Rate Limiting | 300 req/15min general, 30 req/min on HubSpot contact search |
+| Input Sanitization | traineeName regex + length validation, contact ID numeric check |
+| Error Leaks | All `err.message` exposures replaced with generic messages |
+| XSS Prevention | Removed `window.__API_BASE__` global injection point |
+| Prod Validation | Missing `JWT_SECRET`/`DATABASE_URL` in production = process.exit(1) |
+
+### New Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `JWT_SECRET` | Prod only | Secret for signing JWT tokens |
+| `ADMIN_PASSWORD` | Always | Admin login password (default: `admin123` for dev) |
+| `ALLOWED_ORIGINS` | Prod only | Comma-separated allowed CORS origins |
+| `NODE_ENV` | Prod only | Set to `production` for strict validation |
+
+---
+
 ## v2.1.0 — Registration List (2026-02-23)
 
 Added the Registration List feature (Part 2) — a per-cycle table showing all enrolled students pulled live from HubSpot, matched by course codes entered at cycle creation.

@@ -11,6 +11,8 @@ A scheduling system for booking lab stations across 12-week cycles. Supports mul
 | Backend | Express.js + Prisma ORM | REST API at port 5001 |
 | Database | SQLite (dev) / PostgreSQL (prod) | Prisma manages migrations |
 | CRM | HubSpot API | Optional — contact search & deal lookup |
+| Validation | Joi | Schema-first request validation |
+| Auth | JWT + HttpOnly cookies | Admin password login, 8h expiry |
 
 ## Data Model
 
@@ -27,6 +29,7 @@ cd backend
 npm install
 npx prisma migrate dev --name init   # Creates SQLite DB + seeds data
 npm run dev                           # Starts on http://localhost:5001
+# Default login password: admin123
 
 # 2. Frontend (new terminal)
 cd frontend
@@ -65,33 +68,51 @@ docker compose -f docker-compose.prod.yml down   # prod
 
 ## API Endpoints
 
+### Auth (no versioning)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/auth/login` | Login with password `{ password }` |
+| POST | `/api/auth/logout` | Logout (clears cookie) |
+| GET | `/api/auth/check` | Check if session is valid |
+
 ### Cycles
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/cycles` | List all cycles (newest first) |
-| POST | `/api/cycles` | Create next cycle `{ year }` |
-| PATCH | `/api/cycles/:id/lock` | Lock a cycle (read-only) |
-| PATCH | `/api/cycles/:id/unlock` | Unlock a cycle |
+| GET | `/api/v1/cycles` | List all cycles (newest first) |
+| POST | `/api/v1/cycles` | Create next cycle `{ year }` |
+| PATCH | `/api/v1/cycles/:id/lock` | Lock a cycle (read-only) |
+| PATCH | `/api/v1/cycles/:id/unlock` | Unlock a cycle |
+| DELETE | `/api/v1/cycles/:id` | Delete cycle + bookings |
+| PATCH | `/api/v1/cycles/:id/weeks` | Update week dates |
+| PATCH | `/api/v1/cycles/:id/course-codes` | Update course codes |
 
 ### Availability
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/availability/grid` | Get 12-week grid `{ cycleId, shift, labType, side }` |
-| POST | `/api/availability/book` | Book station `{ cycleId, stationId, shift, weeks[], traineeName }` |
-| POST | `/api/availability/unbook` | Remove booking `{ cycleId, stationId, shift, weeks[] }` |
-| POST | `/api/availability/find` | Find consecutive available blocks `{ cycleId, shift, labType, side, startWeek, endWeek, weeksNeeded }` |
-| POST | `/api/availability/reset` | Clear all bookings for cycle `{ cycleId }` |
-| GET | `/api/availability/export?cycleId=X` | Export cycle as CSV |
+| POST | `/api/v1/availability/grid` | Get 12-week grid `{ cycleId, shift, labType, side }` |
+| POST | `/api/v1/availability/book` | Book station `{ cycleId, stationId, shift, weeks[], traineeName }` |
+| POST | `/api/v1/availability/unbook` | Remove booking `{ cycleId, stationId, shift, weeks[] }` |
+| POST | `/api/v1/availability/find` | Find consecutive available blocks `{ cycleId, shift, labType, side, startWeek, endWeek, weeksNeeded }` |
+| POST | `/api/v1/availability/reset` | Clear all bookings for cycle `{ cycleId }` |
+| GET | `/api/v1/availability/export?cycleId=X` | Export cycle as CSV |
 
 ### HubSpot Contacts
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/availability/contacts/search?q=name` | Search contacts |
-| GET | `/api/availability/contacts/:id` | Get contact by ID |
-| PATCH | `/api/availability/contacts/:id/payment-status` | Update payment status |
+| GET | `/api/v1/availability/contacts/search?q=name` | Search contacts |
+| GET | `/api/v1/availability/contacts/:id` | Get contact by ID |
+| PATCH | `/api/v1/availability/contacts/:id/payment-status` | Update payment status |
+
+### Registration
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/cycles/:id/registration?shift=AM` | Fetch registration list |
+| GET | `/api/v1/cycles/:id/registration/export?shift=AM` | Export registration CSV |
 
 ## Environment Variables
 
@@ -101,6 +122,10 @@ docker compose -f docker-compose.prod.yml down   # prod
 DATABASE_URL=file:./dev.db              # SQLite for dev (auto-configured)
 PORT=5001
 HUBSPOT_API_KEY=                        # Optional: HubSpot Private App token
+JWT_SECRET=change-me-in-production      # Required in production
+ADMIN_PASSWORD=admin123                 # Admin login password
+ALLOWED_ORIGINS=http://localhost:5173   # Comma-separated CORS origins
+NODE_ENV=development                    # "production" for strict validation
 ```
 
 ### Frontend
@@ -119,28 +144,46 @@ backend/
     dev.db              # SQLite database (gitignored)
   src/
     index.js            # Express app entry point
-    config.js           # Environment config
+    app.js              # Express app config, middleware, routes
+    config.js           # Environment config + production validation
     db.js               # Prisma client singleton
     hubspot.js          # HubSpot CRM service
+    lib/
+      AppError.js       # Custom error class for typed errors
+    middleware/
+      auth.js           # JWT authentication (HttpOnly cookies)
+      validate.js       # Joi schema validation middleware
+      errorHandler.js   # Global error handler
+      respond.js        # Response envelope helpers
+    schemas/            # Joi validation schemas (one per route group)
+    services/           # Business logic layer (cycles, bookings, grid, registration)
     routes/
-      availability.js   # Grid, book, unbook, find, reset, export + HubSpot routes
-      cycles.js         # Cycle CRUD + lock/unlock
+      auth.js           # Login/logout/check
+      cycles.js         # Cycle CRUD
+      grid.js           # Grid + export
+      bookings.js       # Book/unbook/find/reset
+      contacts.js       # HubSpot contacts
+      registration.js   # Registration list
+  __tests__/            # 18 backend tests (Jest + Supertest)
 
 frontend/
   src/
-    App.jsx             # Main orchestrator
-    api.js              # All API client functions
-    config.js           # API base URL config
+    App.jsx             # Main orchestrator with auth state
+    api.js              # API client (envelope unwrap, auth interceptor)
+    config.js           # API base URL
     components/
-      CycleTabs.jsx         # Chrome-style cycle tabs with lock/create
-      FilterBar.jsx         # Shift / Lab Type / Side dropdowns
-      SearchCriteriaForm.jsx # Week range + consecutive weeks search
-      BookingSection.jsx     # Contact search + booking form
-      SearchResults.jsx      # Ranked availability results
-      AvailabilityGrid.jsx   # Full-width interactive grid with drag-select
-      StudentInfoDialog.jsx  # Student info popup with HubSpot data
+      LoginPage.jsx         # Admin login form
+      CycleTabs.jsx         # Cycle tab bar
+      FilterBar.jsx         # Shift / Lab Type / Side filters
+      SearchCriteriaForm.jsx # Week search form
+      BookingSection.jsx     # Contact + booking form
+      SearchResults.jsx      # Availability results
+      AvailabilityGrid.jsx   # Interactive grid
+      StudentInfoDialog.jsx  # Student info popup
       CellBookingDialog.jsx  # Grid cell booking modal
-      ContactSearch.jsx      # HubSpot contact search dropdown
+      ContactSearch.jsx      # HubSpot contact search
+      RegistrationList.jsx   # Registration list table
+  __tests__/            # 6 frontend tests (Vitest)
 ```
 
 ## Seed Data
@@ -154,8 +197,21 @@ frontend/
 | Lab B9 | Pre-Exam | 20 | 10, 11 |
 | Lab D | Pre-Exam | 15 | 1 |
 
+## Security
+
+- All endpoints require authentication (JWT in HttpOnly cookie)
+- CORS restricted to allowed origins
+- Helmet security headers on all responses
+- Rate limiting: 300 req/15min general, 30 req/min on HubSpot search
+- Input validation via Joi on all request bodies and query params
+- Global error handler — no stack traces or internal errors leak to client
+
 ## Key Features
 
+- **Authentication** with JWT + HttpOnly cookies
+- **Input validation** with Joi schemas on all endpoints
+- **API versioning** under `/api/v1/`
+- **Registration list** from HubSpot with CSV export
 - **12-week cycles** with create/lock/unlock
 - **Chrome-style tabs** for cycle navigation
 - **Filter by**: Shift (AM/PM), Lab Type (Regular/Pre-Exam), Side (All/LH/RH)

@@ -1,6 +1,6 @@
 # Lab Availability Manager (SLAM) — Feature Reference
 
-> Last updated: 2026-02-23
+> Last updated: 2026-02-24
 
 This document lists every feature in the application, which files implement it, which API endpoints power it, and which tests cover it. Use this as a map when working on the codebase.
 
@@ -16,6 +16,8 @@ This document lists every feature in the application, which files implement it, 
 | Database | SQLite (dev), PostgreSQL-ready (prod) |
 | External API | HubSpot CRM (contact search, payment status) |
 | Testing | Jest + Supertest (backend), Vitest + Testing Library (frontend) |
+| Validation | Joi (backend) | Schema-first request validation |
+| Auth | JWT + HttpOnly cookies | Password-based admin login |
 
 ---
 
@@ -24,40 +26,62 @@ This document lists every feature in the application, which files implement it, 
 ```
 backend/
   src/
-    app.js              # Express app (no .listen — used by tests + index)
+    app.js              # Express app — v1 router, middleware, error handler
     index.js            # Entry point — imports app, starts server
-    config.js           # Environment config (PORT, DATABASE_URL, HUBSPOT_API_KEY)
+    config.js           # Environment config (PORT, DATABASE_URL, HUBSPOT_API_KEY, JWT_SECRET)
     db.js               # Prisma client singleton
     hubspot.js          # HubSpot CRM service (contact search + registration list builder)
+    lib/
+      AppError.js       # Custom error class (statusCode, message, details)
+    middleware/
+      auth.js           # JWT authentication (requireAuth, cookie-based)
+      validate.js       # Joi schema validation middleware
+      errorHandler.js   # Global error handler (AppError + Prisma errors)
+      respond.js        # Response envelope helpers (ok, list, created)
+    schemas/
+      cycles.js         # Joi schemas for cycle endpoints
+      bookings.js       # Joi schemas for booking endpoints
+      grid.js           # Joi schemas for grid + export
+      contacts.js       # Joi schemas for contact endpoints
+      registration.js   # Joi schemas for registration endpoints
+    services/
+      cycleService.js   # Cycle CRUD business logic
+      bookingService.js # Booking logic (book, unbook, find, reset)
+      gridService.js    # Grid builder + CSV export
+      registrationService.js # Registration list from HubSpot
     routes/
-      cycles.js         # Cycle CRUD + week dates + lock/unlock + delete + course codes
-      grid.js           # Availability grid + CSV export
-      bookings.js       # Book, unbook, find combinations, reset
-      contacts.js       # HubSpot contact search, details, payment status
-      registration.js   # Registration list (live from HubSpot) + CSV export
+      auth.js           # Login, logout, auth check (/api/auth/*)
+      cycles.js         # Cycle CRUD (thin adapter → cycleService)
+      grid.js           # Grid + export (thin adapter → gridService)
+      bookings.js       # Book/unbook/find/reset (thin adapter → bookingService)
+      contacts.js       # HubSpot contact endpoints
+      registration.js   # Registration list + CSV export
   prisma/
     schema.prisma       # Database schema
     seed.js             # Seeds 6 labs, 133 stations, initial cycle
     migrations/         # Prisma migration history
   __tests__/
-    setup.js            # Global test setup (creates test.db, seeds minimal data)
-    teardown.js         # Global test teardown (deletes test.db)
+    setup.js            # Global test setup
+    teardown.js         # Global test teardown
     env-setup.js        # Sets DATABASE_URL for test worker
     cycles.test.js      # 4 tests for cycle endpoints
-    availability.test.js # 2 tests for grid + export endpoints
+    availability.test.js # 2 tests for grid + export
+    auth.test.js        # 5 tests for authentication
+    validation.test.js  # 7 tests for Joi validation + error handler
 
 frontend/
   src/
-    App.jsx             # Main orchestrator — state management, handler wiring
-    api.js              # All API call functions
-    config.js           # API_BASE URL
+    App.jsx             # Main orchestrator — auth state, view routing
+    api.js              # All API call functions (envelope unwrap)
+    config.js           # API_BASE URL (no window global)
     components/
+      LoginPage.jsx         # Admin login form
       CycleTabs.jsx         # Cycle tab bar with +/x/lock
       FilterBar.jsx         # Shift, Lab Type, Side dropdowns
       SearchCriteriaForm.jsx # Week range + weeks needed inputs
       BookingSection.jsx     # Trainee name + contact search + book button
       SearchResults.jsx      # Ranked availability results list
-      AvailabilityGrid.jsx   # Interactive grid with drag-select, week date popover
+      AvailabilityGrid.jsx   # Interactive grid with drag-select
       StudentInfoDialog.jsx  # Student info popup with HubSpot data
       CellBookingDialog.jsx  # Modal for booking from grid cell click
       ContactSearch.jsx      # HubSpot contact search dropdown
@@ -71,20 +95,40 @@ frontend/
 
 ## Features
 
+### 0. Authentication
+
+All API endpoints (except health check) require authentication. Admin logs in with a password, receives a JWT token stored in an HttpOnly cookie.
+
+| Action | UI | API Endpoint | Backend File | Frontend File |
+|--------|-----|-------------|-------------|---------------|
+| Login | Enter password, click Login | `POST /api/auth/login` | `routes/auth.js` | `LoginPage.jsx` |
+| Logout | Click Logout button | `POST /api/auth/logout` | `routes/auth.js` | `App.jsx` |
+| Session check | Auto-check on page load | `GET /api/auth/check` | `routes/auth.js` | `App.jsx` |
+
+**Security measures:**
+- JWT stored in HttpOnly cookie (not accessible via JavaScript)
+- 8-hour token expiry
+- 401 responses trigger automatic logout via axios interceptor
+- CORS restricted to allowed origins only
+- Helmet security headers on all responses
+- Rate limiting: 300 req/15min general, 30 req/min on contact search
+
+---
+
 ### 1. Cycle Management
 
 Cycles represent 12-week scheduling periods (e.g., "Cycle 1 - 2026").
 
 | Action | UI | API Endpoint | Backend File | Frontend File |
 |--------|-----|-------------|-------------|---------------|
-| List cycles | Tab bar loads on page mount | `GET /api/cycles` | `routes/cycles.js` | `CycleTabs.jsx` |
-| Create cycle | Click "+" button, enter year + optional course codes | `POST /api/cycles` | `routes/cycles.js` | `CycleTabs.jsx` |
-| Delete cycle | Click "x" on tab, confirm dialog | `DELETE /api/cycles/:id` | `routes/cycles.js` | `CycleTabs.jsx` |
-| Lock cycle | Right-click tab | `PATCH /api/cycles/:id/lock` | `routes/cycles.js` | `CycleTabs.jsx` |
-| Unlock cycle | Right-click locked tab | `PATCH /api/cycles/:id/unlock` | `routes/cycles.js` | `CycleTabs.jsx` |
+| List cycles | Tab bar loads on page mount | `GET /api/v1/cycles` | `routes/cycles.js` | `CycleTabs.jsx` |
+| Create cycle | Click "+" button, enter year + optional course codes | `POST /api/v1/cycles` | `routes/cycles.js` | `CycleTabs.jsx` |
+| Delete cycle | Click "x" on tab, confirm dialog | `DELETE /api/v1/cycles/:id` | `routes/cycles.js` | `CycleTabs.jsx` |
+| Lock cycle | Right-click tab | `PATCH /api/v1/cycles/:id/lock` | `routes/cycles.js` | `CycleTabs.jsx` |
+| Unlock cycle | Right-click locked tab | `PATCH /api/v1/cycles/:id/unlock` | `routes/cycles.js` | `CycleTabs.jsx` |
 | Switch cycle | Click tab | (frontend only) | — | `App.jsx` |
 
-| Edit course codes | "Edit Course Codes" button in Registration List | `PATCH /api/cycles/:id/course-codes` | `routes/cycles.js` | `RegistrationList.jsx` |
+| Edit course codes | "Edit Course Codes" button in Registration List | `PATCH /api/v1/cycles/:id/course-codes` | `routes/cycles.js` | `RegistrationList.jsx` |
 
 **Business rules:**
 - Creating a cycle auto-generates 12 CycleWeek records (week 1-12) with null dates
@@ -104,7 +148,7 @@ Each week in a cycle can have optional start/end dates displayed in the grid hea
 | Action | UI | API Endpoint | Backend File | Frontend File |
 |--------|-----|-------------|-------------|---------------|
 | View week dates | Grid headers show "W1 (Jan 6-Jan 10)" | (included in grid response) | `routes/grid.js` | `AvailabilityGrid.jsx` |
-| Edit week dates | Click week header, popover with date inputs | `PATCH /api/cycles/:id/weeks` | `routes/cycles.js` | `AvailabilityGrid.jsx` |
+| Edit week dates | Click week header, popover with date inputs | `PATCH /api/v1/cycles/:id/weeks` | `routes/cycles.js` | `AvailabilityGrid.jsx` |
 
 **Business rules:**
 - Week numbers must be 1-12
@@ -122,7 +166,7 @@ The main UI: a table showing stations as rows and weeks 1-12 as columns.
 
 | Action | UI | API Endpoint | Backend File | Frontend File |
 |--------|-----|-------------|-------------|---------------|
-| Load grid | Auto-loads when cycle/filters change | `POST /api/availability/grid` | `routes/grid.js` | `App.jsx` → `AvailabilityGrid.jsx` |
+| Load grid | Auto-loads when cycle/filters change | `POST /api/v1/availability/grid` | `routes/grid.js` | `App.jsx` → `AvailabilityGrid.jsx` |
 | Filter grid | Shift (AM/PM), Lab Type (Regular/Pre-Exam), Side (All/LH/RH) | (filters sent with grid request) | `routes/grid.js` | `FilterBar.jsx` |
 | Search in grid | Text input filters rows by trainee name | (frontend only) | — | `AvailabilityGrid.jsx` |
 
@@ -149,18 +193,18 @@ Users can book/unbook stations for trainees via two methods: search-based or gri
 
 | Action | UI | API Endpoint | Backend File | Frontend File |
 |--------|-----|-------------|-------------|---------------|
-| Find available slots | Enter week range + weeks needed, click Search | `POST /api/availability/find` | `routes/bookings.js` | `SearchCriteriaForm.jsx` |
+| Find available slots | Enter week range + weeks needed, click Search | `POST /api/v1/availability/find` | `routes/bookings.js` | `SearchCriteriaForm.jsx` |
 | View results | Ranked list of available station+week combos | (frontend only) | — | `SearchResults.jsx` |
-| Book from results | Select combo, enter name, click Book | `POST /api/availability/book` | `routes/bookings.js` | `BookingSection.jsx` |
+| Book from results | Select combo, enter name, click Book | `POST /api/v1/availability/book` | `routes/bookings.js` | `BookingSection.jsx` |
 
 #### 4b. Grid-Click Booking (direct)
 
 | Action | UI | API Endpoint | Backend File | Frontend File |
 |--------|-----|-------------|-------------|---------------|
-| Book from grid | Click available cell(s), enter name in dialog | `POST /api/availability/book` | `routes/bookings.js` | `CellBookingDialog.jsx` |
-| Unbook from grid | Drag-select booked cells, click "Clear Selected" | `POST /api/availability/unbook` | `routes/bookings.js` | `AvailabilityGrid.jsx` |
+| Book from grid | Click available cell(s), enter name in dialog | `POST /api/v1/availability/book` | `routes/bookings.js` | `CellBookingDialog.jsx` |
+| Unbook from grid | Drag-select booked cells, click "Clear Selected" | `POST /api/v1/availability/unbook` | `routes/bookings.js` | `AvailabilityGrid.jsx` |
 | View booked info | Single-click booked cell | (frontend only) | — | `StudentInfoDialog.jsx` |
-| Reset all bookings | Click "Clear All" button, confirm | `POST /api/availability/reset` | `routes/bookings.js` | `AvailabilityGrid.jsx` |
+| Reset all bookings | Click "Clear All" button, confirm | `POST /api/v1/availability/reset` | `routes/bookings.js` | `AvailabilityGrid.jsx` |
 
 **Drag-select behavior:**
 - Mouse-down on a cell starts selection mode (book or unbook based on cell state)
@@ -182,7 +226,7 @@ Exports the current grid view as a downloadable CSV file.
 
 | Action | UI | API Endpoint | Backend File | Frontend File |
 |--------|-----|-------------|-------------|---------------|
-| Export | Click "Export CSV" button | `GET /api/availability/export?cycleId=X&shift=AM&labType=REGULAR&side=ALL` | `routes/grid.js` | `App.jsx` → `api.js` |
+| Export | Click "Export CSV" button | `GET /api/v1/availability/export?cycleId=X&shift=AM&labType=REGULAR&side=ALL` | `routes/grid.js` | `App.jsx` → `api.js` |
 
 **CSV format** (mirrors the grid layout):
 ```
@@ -206,9 +250,9 @@ Contact lookup and payment status tracking via HubSpot CRM API.
 
 | Action | UI | API Endpoint | Backend File | Frontend File |
 |--------|-----|-------------|-------------|---------------|
-| Search contacts | Type in contact search field | `GET /api/availability/contacts/search?q=X` | `routes/contacts.js` | `ContactSearch.jsx` |
-| Get contact details | Auto-fetched when viewing booked cell | `GET /api/availability/contacts/:id` | `routes/contacts.js` | `StudentInfoDialog.jsx` |
-| Update payment status | (from student info dialog) | `PATCH /api/availability/contacts/:id/payment-status` | `routes/contacts.js` | `StudentInfoDialog.jsx` |
+| Search contacts | Type in contact search field | `GET /api/v1/availability/contacts/search?q=X` | `routes/contacts.js` | `ContactSearch.jsx` |
+| Get contact details | Auto-fetched when viewing booked cell | `GET /api/v1/availability/contacts/:id` | `routes/contacts.js` | `StudentInfoDialog.jsx` |
+| Update payment status | (from student info dialog) | `PATCH /api/v1/availability/contacts/:id/payment-status` | `routes/contacts.js` | `StudentInfoDialog.jsx` |
 | Auto-match by name | When clicking booked cell, searches HubSpot by trainee name | (uses search endpoint) | `routes/contacts.js` | `App.jsx` |
 
 **Notes:**
@@ -225,12 +269,12 @@ Per-cycle table showing all enrolled students, pulled live from HubSpot by match
 | Action | UI | API Endpoint | Backend File | Frontend File |
 |--------|-----|-------------|-------------|---------------|
 | View toggle | Click "Seating Grid" / "Registration List" tabs | (frontend only) | — | `App.jsx` |
-| Load registration | Auto-loads when cycle/shift changes | `GET /api/cycles/:id/registration?shift=AM` | `routes/registration.js` | `RegistrationList.jsx` |
+| Load registration | Auto-loads when cycle/shift changes | `GET /api/v1/cycles/:id/registration?shift=AM` | `routes/registration.js` | `RegistrationList.jsx` |
 | Switch shift | Click AM/PM toggle | (changes query param) | `routes/registration.js` | `RegistrationList.jsx` |
 | Search/filter | Type in search bar | (frontend only) | — | `RegistrationList.jsx` |
 | Refresh | Click "Refresh" button | `GET ...?refresh=true` | `routes/registration.js` | `RegistrationList.jsx` |
-| Export CSV | Click "Export CSV" button | `GET /api/cycles/:id/registration/export?shift=AM` | `routes/registration.js` | `RegistrationList.jsx` |
-| Edit course codes | Click "Edit Course Codes", update in dialog | `PATCH /api/cycles/:id/course-codes` | `routes/cycles.js` | `RegistrationList.jsx` |
+| Export CSV | Click "Export CSV" button | `GET /api/v1/cycles/:id/registration/export?shift=AM` | `routes/registration.js` | `RegistrationList.jsx` |
+| Edit course codes | Click "Edit Course Codes", update in dialog | `PATCH /api/v1/cycles/:id/course-codes` | `routes/cycles.js` | `RegistrationList.jsx` |
 
 **Table columns (15):**
 
@@ -279,6 +323,16 @@ Per-cycle table showing all enrolled students, pulled live from HubSpot by match
 
 ---
 
+## Architecture (Phase 2)
+
+**Request flow:** Client → Auth middleware → Joi validation → Route (thin adapter) → Service (business logic) → Prisma → DB
+
+**Error flow:** Service throws `AppError(statusCode, message)` → Global `errorHandler` catches → Formatted JSON response
+
+**Response envelope:** All JSON responses wrapped in `{ data, message }` or `{ data, count, message }` for lists. Errors return `{ error, details? }`.
+
+---
+
 ## Database Schema
 
 ```
@@ -304,48 +358,56 @@ Cycle (id, name, year, number, locked, courseCodes?, createdAt)
 
 ## API Endpoints Summary
 
-### Cycles (`/api/cycles`) — `routes/cycles.js`
+### Auth (`/api/auth`) — `routes/auth.js`
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/` | List all cycles with cycleWeeks + parsed courseCodes |
-| POST | `/` | Create next cycle for year (auto-creates 12 CycleWeeks, optional courseCodes) |
-| PATCH | `/:id/weeks` | Update week start/end dates |
-| PATCH | `/:id/course-codes` | Update course codes for a cycle |
-| PATCH | `/:id/lock` | Lock cycle |
-| PATCH | `/:id/unlock` | Unlock cycle |
-| DELETE | `/:id` | Delete cycle + all bookings + week records |
+| POST | `/api/auth/login` | Login with admin password, sets JWT cookie |
+| POST | `/api/auth/logout` | Clears JWT cookie |
+| GET | `/api/auth/check` | Verify current session |
 
-### Registration (`/api/cycles`) — `routes/registration.js`
+### Cycles (`/api/v1/cycles`) — `routes/cycles.js`
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/:id/registration?shift=AM&refresh=true` | Fetch registration list from HubSpot |
-| GET | `/:id/registration/export?shift=AM` | Download registration list as CSV |
+| GET | `/api/v1/cycles` | List all cycles with cycleWeeks + parsed courseCodes |
+| POST | `/api/v1/cycles` | Create next cycle for year (auto-creates 12 CycleWeeks, optional courseCodes) |
+| PATCH | `/api/v1/cycles/:id/weeks` | Update week start/end dates |
+| PATCH | `/api/v1/cycles/:id/course-codes` | Update course codes for a cycle |
+| PATCH | `/api/v1/cycles/:id/lock` | Lock cycle |
+| PATCH | `/api/v1/cycles/:id/unlock` | Unlock cycle |
+| DELETE | `/api/v1/cycles/:id` | Delete cycle + all bookings + week records |
 
-### Grid (`/api/availability`) — `routes/grid.js`
-
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/grid` | Build 12-week availability grid |
-| GET | `/export` | Download grid-format CSV |
-
-### Bookings (`/api/availability`) — `routes/bookings.js`
+### Registration (`/api/v1/cycles`) — `routes/registration.js`
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/book` | Book station(s) for a trainee |
-| POST | `/unbook` | Remove booking(s) |
-| POST | `/find` | Find consecutive available week blocks |
-| POST | `/reset` | Delete all bookings for a cycle |
+| GET | `/api/v1/cycles/:id/registration?shift=AM&refresh=true` | Fetch registration list from HubSpot |
+| GET | `/api/v1/cycles/:id/registration/export?shift=AM` | Download registration list as CSV |
 
-### Contacts (`/api/availability`) — `routes/contacts.js`
+### Grid (`/api/v1/availability`) — `routes/grid.js`
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/contacts/search` | Search HubSpot contacts |
-| GET | `/contacts/:id` | Get contact by ID |
-| PATCH | `/contacts/:id/payment-status` | Update payment status |
+| POST | `/api/v1/availability/grid` | Build 12-week availability grid |
+| GET | `/api/v1/availability/export` | Download grid-format CSV |
+
+### Bookings (`/api/v1/availability`) — `routes/bookings.js`
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/v1/availability/book` | Book station(s) for a trainee |
+| POST | `/api/v1/availability/unbook` | Remove booking(s) |
+| POST | `/api/v1/availability/find` | Find consecutive available week blocks |
+| POST | `/api/v1/availability/reset` | Delete all bookings for a cycle |
+
+### Contacts (`/api/v1/availability`) — `routes/contacts.js`
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/availability/contacts/search` | Search HubSpot contacts |
+| GET | `/api/v1/availability/contacts/:id` | Get contact by ID |
+| PATCH | `/api/v1/availability/contacts/:id/payment-status` | Update payment status |
 
 ---
 
@@ -355,8 +417,10 @@ Cycle (id, name, year, number, locked, courseCodes?, createdAt)
 
 | Test File | Tests | What's Covered |
 |-----------|-------|---------------|
-| `cycles.test.js` | 4 | Create cycle (12 CycleWeeks auto-created), list cycles, upsert week dates, validation (locked/invalid dates/invalid week) |
-| `availability.test.js` | 2 | Grid includes weekDates array with dates, export CSV is grid-format with week date headers |
+| `cycles.test.js` | 4 | Create cycle, list cycles, upsert week dates, validation |
+| `availability.test.js` | 2 | Grid includes weekDates array with dates, export CSV format |
+| `auth.test.js` | 5 | Login success/fail, auth check, protected route 401, logout |
+| `validation.test.js` | 7 | Missing fields, invalid types, bad shift, envelope format, nonexistent cycle, missing grid fields |
 
 ### Frontend (Vitest + Testing Library) — `npm test` in `frontend/`
 
@@ -382,7 +446,7 @@ npm install
 npm start                      # http://localhost:5173
 
 # Tests
-cd backend && npm test         # 6 backend tests
+cd backend && npm test         # 18 backend tests
 cd frontend && npm test        # 6 frontend tests
 ```
 
@@ -395,4 +459,8 @@ cd frontend && npm test        # 6 frontend tests
 PORT=5001
 DATABASE_URL=file:./dev.db     # SQLite for dev; PostgreSQL URL for prod
 HUBSPOT_API_KEY=pat-na1-...    # HubSpot private app token
+JWT_SECRET=your-secret-here    # Required in production
+ADMIN_PASSWORD=admin123        # Admin login password
+ALLOWED_ORIGINS=http://localhost:5173  # Comma-separated, required in production
+NODE_ENV=development           # Set to "production" for strict env validation
 ```
