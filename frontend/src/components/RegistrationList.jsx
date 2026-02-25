@@ -362,6 +362,7 @@ export default function RegistrationList({ cycleId, cycleName, courseCodes, onUp
                   <th className="px-3 py-2 font-medium text-gray-700 whitespace-nowrap">Roadmap</th>
                   <th className="px-3 py-2 font-medium text-gray-700 whitespace-nowrap">AFK</th>
                   <th className="px-3 py-2 font-medium text-gray-700 whitespace-nowrap">ACJ</th>
+                  <th className="px-3 py-2 font-medium text-gray-700 whitespace-nowrap">Exam Date</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -400,6 +401,7 @@ export default function RegistrationList({ cycleId, cycleName, courseCodes, onUp
                         {row.hasACJ ? 'Yes' : 'No'}
                       </span>
                     </td>
+                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{formatDate(row.examDate)}</td>
                   </tr>
                 ))}
               </tbody>

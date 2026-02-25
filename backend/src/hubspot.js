@@ -529,7 +529,7 @@ class HubSpotService {
 
     // STEP 5: Batch read ALL contact details (1 call per 100 contacts)
     const contactMap = await this.batchReadObjects('contacts', contactIds,
-      ['firstname', 'lastname', 'email', 'student_id', 'phone']);
+      ['firstname', 'lastname', 'email', 'student_id', 'phone', 'ndecc_exam_date']);
 
     // STEP 6: Get contact history for cycle count & program flags
     // Use batch: contact → deals associations, then deal → line_items
@@ -619,7 +619,7 @@ class HubSpotService {
 
       // Skip excluded deal stages
       const statusLower = paymentStatus.toLowerCase();
-      if (statusLower.includes('enrollment lost') || statusLower.includes('withdrawn enrollment')) continue;
+      if (statusLower.includes('enrol') && (statusLower.includes('lost') || statusLower.includes('withdrawn'))) continue;
 
       const history = contactHistories.get(contactId) || { cycleCount: 0, hasRoadmap: false, hasAFK: false, hasACJ: false };
 
@@ -639,6 +639,7 @@ class HubSpotService {
         hasRoadmap: history.hasRoadmap,
         hasAFK: history.hasAFK,
         hasACJ: history.hasACJ,
+        examDate: contact.properties.ndecc_exam_date || null,
         contactId,
         dealId: primaryDealId,
       });

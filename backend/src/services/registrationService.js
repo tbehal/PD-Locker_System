@@ -60,7 +60,7 @@ async function exportRegistrationCsv(cycleId, shift) {
     'Seat #', 'First Name', 'Last Name', 'Email', 'Phone', 'Student ID',
     'Course Start Date', 'Course End Date', 'Registration Date',
     'Payment Status', 'Outstanding', 'Cycle Count',
-    'Roadmap', 'AFK', 'ACJ',
+    'Roadmap', 'AFK', 'ACJ', 'Exam Date',
   ];
 
   const csvRows = [headers.join(',')];
@@ -81,6 +81,7 @@ async function exportRegistrationCsv(cycleId, shift) {
       row.hasRoadmap ? 'Yes' : 'No',
       row.hasAFK ? 'Yes' : 'No',
       row.hasACJ ? 'Yes' : 'No',
+      row.examDate ? new Date(row.examDate).toLocaleDateString('en-US') : '',
     ].join(','));
   }
 
