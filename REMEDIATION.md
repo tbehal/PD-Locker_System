@@ -14,7 +14,7 @@ This document is the single source of truth for bringing NDECCSchedApp to produc
 | [Phase 1](#phase-1-critical-security-fixes)              | Security Fixes                | Critical | 1-2 days    | ✅ COMPLETE |
 | [Phase 2](#phase-2-backend-architecture-fixes)           | Backend Architecture          | Critical | 3-4 days    | ✅ COMPLETE |
 | [Phase 3](#phase-3-developer-tooling--cicd)              | Developer Tooling & CI/CD     | Critical | 2-3 days    | ✅ COMPLETE |
-| [Phase 4](#phase-4-database--observability)              | Database & Observability      | High     | 3-4 days    | Pending     |
+| [Phase 4](#phase-4-database--observability)              | Database & Observability      | High     | 3-4 days    | ✅ COMPLETE |
 | [Phase 5](#phase-5-typescript-migration)                 | TypeScript Migration          | High     | 5-7 days    | Pending     |
 | [Phase 6](#phase-6-api-documentation--backend-hardening) | API Docs & Backend Hardening  | High     | 3-4 days    | Pending     |
 | [Phase 7](#phase-7-frontend-modernization)               | Frontend Modernization        | High     | 5-7 days    | Pending     |
@@ -23,8 +23,8 @@ This document is the single source of truth for bringing NDECCSchedApp to produc
 | [Phase 10](#phase-10-performance--scalability)           | Performance & Scalability     | Medium   | 2-3 days    | Pending     |
 
 **Total estimated effort:** ~32-43 developer-days (~6-8 weeks)
-**Completed:** Phase 1 + 2 + 3 (~7-9 days)
-**Remaining:** ~25-34 developer-days (~5-6 weeks)
+**Completed:** Phase 1 + 2 + 3 + 4 (~10-13 days)
+**Remaining:** ~22-30 developer-days (~4-5 weeks)
 
 ---
 
@@ -95,278 +95,37 @@ This document is the single source of truth for bringing NDECCSchedApp to produc
 
 ---
 
-# Phase 4: Database & Observability
-
-**Why now:** Before making big code changes (TypeScript, frontend overhaul), the database and monitoring foundations must be solid. You can't debug production issues with `console.log`, and SQLite/PostgreSQL behavioral differences will bite you.
-
-**Current state:** SQLite in dev (PG in prod via Docker), no indexes beyond PKs, no cascades, no structured logging, no error tracking, no request logging.
-
----
-
-## Task 4.1 — Migrate Prisma from SQLite to PostgreSQL
-
-**Complexity: Medium** | **Files:** `prisma/schema.prisma`, `docker-compose.dev.yml`, `.env.example`, all services using `JSON.parse/stringify`
-
-**Step 1:** Update schema provider:
-
-```prisma
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
-```
-
-**Step 2:** Change `courseCodes` from manual JSON string to native JSONB:
-
-```prisma
-model Cycle {
-  courseCodes Json?  // was: String?
-}
-```
-
-**Step 3:** Remove all `JSON.parse(cycle.courseCodes)` / `JSON.stringify(courseCodes)` calls from:
-
-- `services/cycleService.js` — `createCycle()`, `updateCourseCodes()`, `listCycles()`
-- `services/registrationService.js` — `getRegistrationList()`
-
-Replace with `cycle.courseCodes ?? []` (Prisma handles serialization for `Json` type).
-
-**Step 4:** Update `.env` for local dev:
-
-```env
-DATABASE_URL=postgresql://ndecc:ndecc_dev@localhost:5432/ndecc_sched
-```
-
-**Step 5:** Regenerate migrations:
-
-```bash
-rm -rf prisma/migrations
-npx prisma migrate dev --name init
-```
-
-**Validation:** `npx prisma studio` opens, all data visible, course codes stored as JSONB.
-
----
-
-## Task 4.2 — Add Database Cascades
-
-**Complexity: Small** | **Files:** `prisma/schema.prisma`
-
-```prisma
-model CycleWeek {
-  cycle Cycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
-}
-
-model Booking {
-  cycle   Cycle   @relation(fields: [cycleId], references: [id], onDelete: Cascade)
-  station Station @relation(fields: [stationId], references: [id], onDelete: Cascade)
-}
-```
-
-**After:** Simplify `cycleService.deleteCycle()` — remove manual `deleteMany` calls for bookings/weeks. Single `prisma.cycle.delete()` cascades automatically.
-
-**Validation:** Delete a cycle — bookings and weeks should disappear.
-
----
-
-## Task 4.3 — Add Database Indexes
-
-**Complexity: Small** | **Files:** `prisma/schema.prisma`
-
-```prisma
-model Booking {
-  // existing fields...
-  @@index([cycleId, shift, week])    // grid queries (most common)
-  @@index([contactId])               // student info lookups
-  @@index([cycleId, stationId])      // availability checks
-}
-
-model CycleWeek {
-  // existing fields...
-  @@index([cycleId])                 // week lookups by cycle
-}
-```
-
-Run `npx prisma migrate dev --name add_indexes` after changes.
-
-**Validation:** Run `EXPLAIN ANALYZE` on grid query — should show index scan, not sequential scan.
-
----
-
-## Task 4.4 — Configure Connection Pooling
-
-**Complexity: Small** | **Files:** `backend/src/db.js`, `.env.example`
-
-Update `.env.example`:
-
-```env
-DATABASE_URL=postgresql://ndecc:password@localhost:5432/ndecc_sched?connection_limit=10&pool_timeout=20
-```
-
-Update `db.js` to log connection issues:
-
-```js
-const { PrismaClient } = require('@prisma/client');
-
-const prisma = new PrismaClient({
-  log: process.env.NODE_ENV === 'development' ? ['query', 'warn', 'error'] : ['warn', 'error'],
-});
-
-module.exports = prisma;
-```
-
----
-
-## Task 4.5 — Add Structured Logging (Pino)
-
-**Complexity: Medium** | **Files:** `backend/src/logger.js` (new), `backend/src/app.js`, all services
-
-```bash
-cd backend && npm install pino pino-http
-npm install -D pino-pretty  # dev only, for readable logs
-```
-
-Create `backend/src/logger.js`:
-
-```js
-const pino = require('pino');
-
-const logger = pino({
-  level: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug'),
-  transport:
-    process.env.NODE_ENV !== 'production'
-      ? { target: 'pino-pretty', options: { colorize: true, translateTime: 'SYS:HH:MM:ss' } }
-      : undefined,
-});
-
-module.exports = logger;
-```
-
-Add HTTP request logging in `app.js`:
-
-```js
-const pinoHttp = require('pino-http');
-const logger = require('./logger');
-
-app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.url === '/api/health' } }));
-```
-
-Replace all `console.log/error/warn` in services with `logger.info/error/warn`:
-
-```js
-const logger = require('../logger');
-logger.info({ cycleId, shift }, 'Building grid');
-logger.error({ err, contactId }, 'HubSpot API failed');
-```
-
-**Validation:** Start dev server — requests logged with JSON structure. HubSpot errors logged with context.
-
----
-
-## Task 4.6 — Add Error Tracking (Sentry)
-
-**Complexity: Medium** | **Files:** `backend/src/app.js`, `frontend/src/main.jsx`
-
-**Backend:**
-
-```bash
-cd backend && npm install @sentry/node
-```
-
-In `app.js` (at the very top, before other imports):
-
-```js
-const Sentry = require('@sentry/node');
-
-if (process.env.SENTRY_DSN) {
-  Sentry.init({
-    dsn: process.env.SENTRY_DSN,
-    environment: process.env.NODE_ENV || 'development',
-    tracesSampleRate: 0.1,
-  });
-}
-```
-
-In `errorHandler.js`, report unexpected errors:
-
-```js
-if (!err.statusCode || err.statusCode >= 500) {
-  Sentry.captureException(err);
-}
-```
-
-**Frontend:**
-
-```bash
-cd frontend && npm install @sentry/react
-```
-
-In `main.jsx`:
-
-```js
-import * as Sentry from '@sentry/react';
-
-if (import.meta.env.VITE_SENTRY_DSN) {
-  Sentry.init({
-    dsn: import.meta.env.VITE_SENTRY_DSN,
-    environment: import.meta.env.MODE,
-    tracesSampleRate: 0.1,
-  });
-}
-```
-
-Add to `.env.example`:
-
-```env
-SENTRY_DSN=           # Optional — get from sentry.io
-VITE_SENTRY_DSN=      # Optional — frontend error tracking
-```
-
-**Validation:** Trigger a 500 error — should appear in Sentry dashboard.
-
----
-
-## Task 4.7 — Fix Docker Health Checks
-
-**Complexity: Small** | **Files:** `docker-compose.dev.yml`, `docker-compose.prod.yml`
-
-```yaml
-services:
-  postgres:
-    healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ndecc -d ndecc_sched']
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  backend:
-    depends_on:
-      postgres:
-        condition: service_healthy
-    healthcheck:
-      test: ['CMD-SHELL', 'wget -qO- http://localhost:5001/api/health || exit 1']
-      interval: 10s
-      timeout: 5s
-      retries: 3
-```
-
-**Validation:** `docker compose up` — backend waits for PG to be healthy before starting.
-
----
-
-## Phase 4 Checklist
-
-| #   | Task                         | Complexity | Status |
-| --- | ---------------------------- | ---------- | ------ |
-| 4.1 | Migrate to PostgreSQL        | Medium     | [ ]    |
-| 4.2 | Add database cascades        | Small      | [ ]    |
-| 4.3 | Add database indexes         | Small      | [ ]    |
-| 4.4 | Configure connection pooling | Small      | [ ]    |
-| 4.5 | Structured logging (Pino)    | Medium     | [ ]    |
-| 4.6 | Error tracking (Sentry)      | Medium     | [ ]    |
-| 4.7 | Fix Docker health checks     | Small      | [ ]    |
-
-**Phase 4 Validation:** `docker compose up` starts cleanly, requests are JSON-logged, DB queries use indexes, Sentry captures a test error.
+# Phase 4: Database & Observability ✅ COMPLETE
+
+**Summary:** Added database cascades (`onDelete: Cascade` on Cycle→Booking and Cycle→CycleWeek, `Restrict` on Station→Booking for safety), indexes for grid queries and contact lookups, simplified `deleteCycle()` with lock guard. Replaced all `console.*` with Pino structured logging — `logger.js` singleton with pino-pretty (dev) and JSON (prod), `pino-http` request middleware with header redaction, Prisma event-based log routing through Pino. Tightened ESLint `no-console` to `error`. Zero `console.*` calls remain in `src/`.
+
+**Scope decisions:**
+
+- **Skipped 4.1** (PostgreSQL migration) — user doesn't want Docker/PG setup right now. Schema stays SQLite.
+- **Skipped 4.4** (Connection pooling) — SQLite-specific, not needed until PG migration.
+- **Skipped 4.6** (Sentry) — no account setup yet.
+- **Skipped 4.7** (Docker health checks) — already done previously.
+
+**Implementation notes:**
+
+- `Booking.station` uses `onDelete: Restrict` (not Cascade) — stations are infrastructure data, accidental deletion should fail loudly, not silently wipe bookings.
+- `deleteCycle()` now checks `cycle.locked` before deleting — locked cycles cannot be deleted without unlocking first.
+- Redundant indexes removed during review: `@@index([cycleId])` on CycleWeek (covered by `@@unique([cycleId, week])`), `@@index([cycleId, stationId])` on Booking (covered by unique constraint).
+- `pino-http` uses custom req serializer that only logs method/url/remoteAddress — no headers, no cookies, no JWT tokens in logs.
+- `db.js` uses Prisma event-based logging (`emit: 'event'`) routed through Pino, not string-based config that goes to `console.*`.
+- `config.js` uses `process.stderr.write` for fatal errors (avoids circular dependency with logger).
+- pino-pretty disabled in test environment to avoid worker thread overhead and noisy output.
+- `translateTime` format: `HH:mm:ss` (lowercase `mm` = minutes, not `MM` = month).
+
+**Tasks completed:** 3/7 (3 skipped, 1 already done)
+
+- [x] 4.2 — Database cascades (Cycle→Booking, Cycle→CycleWeek) + `Restrict` on Station→Booking
+- [x] 4.3 — Database indexes (`@@index([cycleId, shift, week])`, `@@index([contactId])`)
+- [x] 4.5 — Structured logging (Pino + pino-http + all console.\* migrated)
+- [~] 4.1 — PostgreSQL migration (deferred)
+- [~] 4.4 — Connection pooling (deferred — SQLite)
+- [~] 4.6 — Sentry error tracking (deferred — no account)
+- [~] 4.7 — Docker health checks (already done)
 
 ---
 
