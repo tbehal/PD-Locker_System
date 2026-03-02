@@ -4,6 +4,8 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const cookieParser = require('cookie-parser');
 const config = require('./config');
+const pinoHttp = require('pino-http');
+const logger = require('./logger');
 const { requireAuth } = require('./middleware/auth');
 const errorHandler = require('./middleware/errorHandler');
 
@@ -42,6 +44,23 @@ app.use(
 // Body parsing + cookies
 app.use(express.json());
 app.use(cookieParser());
+
+// Request logging (skip health checks)
+app.use(
+  pinoHttp({
+    logger,
+    autoLogging: { ignore: (req) => req.url === '/api/health' },
+    serializers: {
+      req(req) {
+        return {
+          method: req.method,
+          url: req.url,
+          remoteAddress: req.remoteAddress,
+        };
+      },
+    },
+  }),
+);
 
 // Rate limiters (skip in test environment)
 if (config.nodeEnv !== 'test') {

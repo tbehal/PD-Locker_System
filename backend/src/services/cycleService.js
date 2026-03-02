@@ -107,12 +107,9 @@ async function setLocked(cycleId, locked) {
 async function deleteCycle(cycleId) {
   const cycle = await prisma.cycle.findUnique({ where: { id: cycleId } });
   if (!cycle) throw new AppError(404, 'Cycle not found.');
+  if (cycle.locked) throw new AppError(403, 'Cannot delete a locked cycle. Unlock it first.');
 
-  await prisma.$transaction([
-    prisma.booking.deleteMany({ where: { cycleId } }),
-    prisma.cycleWeek.deleteMany({ where: { cycleId } }),
-    prisma.cycle.delete({ where: { id: cycleId } }),
-  ]);
+  await prisma.cycle.delete({ where: { id: cycleId } });
 
   return cycle;
 }

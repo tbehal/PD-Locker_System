@@ -2,6 +2,7 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const config = require('../config');
+const logger = require('../logger');
 
 const router = express.Router();
 
@@ -36,7 +37,7 @@ router.post('/login', async (req, res) => {
     res.cookie('token', token, COOKIE_OPTIONS);
     res.json({ data: { authenticated: true }, message: 'Login successful.' });
   } catch (err) {
-    console.error('Login error:', err);
+    logger.error({ err }, 'Login error');
     res.status(500).json({ error: 'Login failed.' });
   }
 });

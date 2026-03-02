@@ -49,7 +49,7 @@ model CycleWeek {
   week      Int
   startDate DateTime? @map("start_date")
   endDate   DateTime? @map("end_date")
-  cycle     Cycle     @relation(fields: [cycleId], references: [id])
+  cycle     Cycle     @relation(fields: [cycleId], references: [id], onDelete: Cascade)
 
   @@unique([cycleId, week])
   @@map("cycle_weeks")
@@ -64,9 +64,11 @@ model Booking {
   traineeName String   @map("trainee_name")
   contactId   String?  @map("contact_id")
   bookedAt    DateTime @default(now()) @map("booked_at")
-  cycle       Cycle    @relation(fields: [cycleId], references: [id])
+  cycle       Cycle    @relation(fields: [cycleId], references: [id], onDelete: Cascade)
   station     Station  @relation(fields: [stationId], references: [id])
 
   @@unique([cycleId, stationId, shift, week])
+  @@index([cycleId, shift, week])
+  @@index([contactId])
   @@map("bookings")
 }

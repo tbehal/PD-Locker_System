@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient();
@@ -5,12 +6,12 @@ const prisma = new PrismaClient();
 // Lab definitions: { name, labType, totalStations, lhStations[] }
 // lhStations are 1-indexed station numbers that are LH; all others are RH
 const LABS = [
-  { name: 'Lab A',  labType: 'REGULAR',  totalStations: 38, lhStations: [1, 38] },
-  { name: 'Lab B',  labType: 'REGULAR',  totalStations: 31, lhStations: [25] },
-  { name: 'Lab C',  labType: 'REGULAR',  totalStations: 14, lhStations: [7] },
-  { name: 'Lab E',  labType: 'REGULAR',  totalStations: 15, lhStations: [14] },
+  { name: 'Lab A', labType: 'REGULAR', totalStations: 38, lhStations: [1, 38] },
+  { name: 'Lab B', labType: 'REGULAR', totalStations: 31, lhStations: [25] },
+  { name: 'Lab C', labType: 'REGULAR', totalStations: 14, lhStations: [7] },
+  { name: 'Lab E', labType: 'REGULAR', totalStations: 15, lhStations: [14] },
   { name: 'Lab B9', labType: 'PRE_EXAM', totalStations: 20, lhStations: [10, 11] },
-  { name: 'Lab D',  labType: 'PRE_EXAM', totalStations: 15, lhStations: [1] },
+  { name: 'Lab D', labType: 'PRE_EXAM', totalStations: 15, lhStations: [1] },
 ];
 
 async function main() {

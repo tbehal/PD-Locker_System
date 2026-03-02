@@ -1,5 +1,6 @@
 // Moved from api/backend/hubspot.js — HubSpot CRM integration
 const axios = require('axios');
+const logger = require('./logger');
 
 class HubSpotService {
   constructor() {
@@ -16,9 +17,7 @@ class HubSpotService {
     this._rateWindow = 10000;
 
     if (!this.apiKey) {
-      console.warn(
-        '  HUBSPOT_API_KEY not found. HubSpot integration will be disabled until a valid token is provided.',
-      );
+      logger.warn('HUBSPOT_API_KEY not found — HubSpot integration disabled');
     }
   }
 
@@ -118,7 +117,7 @@ class HubSpotService {
               deals: deals,
             };
           } catch (error) {
-            console.warn(`Failed to fetch deals for contact ${contact.id}:`, error.message);
+            logger.warn({ contactId: contact.id, err: error }, 'Failed to fetch deals for contact');
             return {
               id: contact.id,
               firstName: contact.properties.firstname || '',
@@ -143,11 +142,11 @@ class HubSpotService {
       const message = error.response?.data?.message || error.message;
 
       if (status === 401) {
-        console.error('HubSpot auth error - invalid or expired token.');
+        logger.error({ status }, 'HubSpot auth error — invalid or expired token');
       } else if (status === 429) {
-        console.warn('HubSpot rate limit reached - retry after delay.');
+        logger.warn({ status }, 'HubSpot rate limit reached — retry after delay');
       } else {
-        console.error('HubSpot search error:', message);
+        logger.error({ status, message }, 'HubSpot search error');
       }
 
       throw new Error(`Failed to search contacts in HubSpot: ${message}`);
@@ -206,14 +205,14 @@ class HubSpotService {
                 const stageName = await this.getDealStageName(pipelineId, stageId);
                 deal.stageName = stageName;
               } catch (error) {
-                console.warn(`Failed to fetch stage name for ${stageId}:`, error.message);
+                logger.warn({ stageId, err: error }, 'Failed to fetch stage name');
                 deal.stageName = stageId;
               }
             }
 
             return deal;
           } catch (error) {
-            console.warn(`Failed to fetch deal ${dealAssoc.id}:`, error.message);
+            logger.warn({ dealId: dealAssoc.id, err: error }, 'Failed to fetch deal');
             return null;
           }
         }),
@@ -221,7 +220,7 @@ class HubSpotService {
 
       return deals.filter((deal) => deal !== null);
     } catch (error) {
-      console.warn(`Failed to fetch deals for contact ${contactId}:`, error.message);
+      logger.warn({ contactId, err: error }, 'Failed to fetch deals for contact');
       return [];
     }
   }
@@ -255,7 +254,7 @@ class HubSpotService {
 
       return stageName;
     } catch (error) {
-      console.warn(`Failed to fetch stage name:`, error.message);
+      logger.warn({ err: error }, 'Failed to fetch stage name');
       return stageId;
     }
   }
@@ -307,14 +306,13 @@ class HubSpotService {
         deals: deals,
       };
     } catch (error) {
-      console.error('Failed to get contact:', error.message);
+      logger.error({ contactId, err: error }, 'Failed to get contact');
       throw new Error(`Failed to get contact from HubSpot: ${error.message}`);
     }
   }
 
   async updateContactPaymentStatus(contactId, paymentStatus) {
-    // eslint-disable-next-line no-console
-    console.log(`Payment status update for contact ${contactId}: ${paymentStatus}`);
+    logger.info({ contactId, paymentStatus }, 'Payment status update tracked via deals');
     return { success: true, message: 'Payment status tracked via deals' };
   }
 
@@ -366,7 +364,7 @@ class HubSpotService {
           }
         }
       } catch (error) {
-        console.warn(`Batch association ${fromType}->${toType} error:`, error.message);
+        logger.warn({ fromType, toType, err: error }, 'Batch association error');
       }
     }
     return resultMap;
@@ -389,7 +387,7 @@ class HubSpotService {
           resultMap.set(obj.id, obj);
         }
       } catch (error) {
-        console.warn(`Batch read ${objectType} error:`, error.message);
+        logger.warn({ objectType, err: error }, 'Batch read error');
       }
     }
     return resultMap;
@@ -480,7 +478,7 @@ class HubSpotService {
 
       return response.data.results || [];
     } catch (error) {
-      console.warn(`Failed to get line items for deal ${dealId}:`, error.message);
+      logger.warn({ dealId, err: error }, 'Failed to get line items for deal');
       return [];
     }
   }
@@ -494,16 +492,14 @@ class HubSpotService {
       }
     }
 
-    // eslint-disable-next-line no-console
-    console.log(`[Registration] Building list for ${shift}, codes:`, shiftCodes);
+    logger.info({ shift, shiftCodes }, '[Registration] Building list');
 
     // STEP 1: Search line items for each course code
     const allLineItems = [];
     for (const courseCode of shiftCodes) {
       const items = await this.searchLineItemsByName(courseCode);
       allLineItems.push(...items);
-      // eslint-disable-next-line no-console
-      console.log(`[Registration] Found ${items.length} line items for "${courseCode}"`);
+      logger.info({ courseCode, count: items.length }, '[Registration] Found line items');
     }
 
     if (allLineItems.length === 0) {
@@ -518,8 +514,7 @@ class HubSpotService {
     // STEP 2: Batch get deal associations for ALL line items (1 call per 100 items)
     const lineItemIds = allLineItems.map((li) => li.id);
     const liToDealMap = await this.batchGetAssociations('line_items', 'deals', lineItemIds);
-    // eslint-disable-next-line no-console
-    console.log(`[Registration] Got deal associations for ${liToDealMap.size} line items`);
+    logger.info({ count: liToDealMap.size }, '[Registration] Got deal associations');
 
     // Build dealId → lineItems mapping
     const dealIdSet = new Set();
@@ -542,8 +537,7 @@ class HubSpotService {
       if (cacheKey) this.registrationCache.set(cacheKey, { data: result, timestamp: Date.now() });
       return result;
     }
-    // eslint-disable-next-line no-console
-    console.log(`[Registration] Found ${dealIds.length} unique deals`);
+    logger.info({ count: dealIds.length }, '[Registration] Found unique deals');
 
     // STEP 3: Batch read ALL deal details (1 call per 100 deals)
     const dealMap = await this.batchReadObjects('deals', dealIds, [
@@ -555,8 +549,7 @@ class HubSpotService {
       'closedate',
       'remaining_amount',
     ]);
-    // eslint-disable-next-line no-console
-    console.log(`[Registration] Loaded ${dealMap.size} deal details`);
+    logger.info({ count: dealMap.size }, '[Registration] Loaded deal details');
 
     // STEP 4: Batch get contact associations for ALL deals (1 call per 100 deals)
     const dealToContactMap = await this.batchGetAssociations('deals', 'contacts', dealIds);
@@ -571,8 +564,7 @@ class HubSpotService {
     }
 
     const contactIds = Array.from(contactDealMap.keys());
-    // eslint-disable-next-line no-console
-    console.log(`[Registration] Found ${contactIds.length} unique contacts`);
+    logger.info({ count: contactIds.length }, '[Registration] Found unique contacts');
 
     // STEP 5: Batch read ALL contact details (1 call per 100 contacts)
     const contactMap = await this.batchReadObjects('contacts', contactIds, [
@@ -615,9 +607,9 @@ class HubSpotService {
     // Batch read all historical line items (for name)
     const histLIMap = await this.batchReadObjects('line_items', Array.from(allHistLIIds), ['name']);
 
-    // eslint-disable-next-line no-console
-    console.log(
-      `[Registration] Loaded history: ${allHistDealIds.size} deals, ${allHistLIIds.size} line items`,
+    logger.info(
+      { deals: allHistDealIds.size, lineItems: allHistLIIds.size },
+      '[Registration] Loaded history',
     );
 
     // Now compute flags per contact from the pre-fetched data
@@ -734,8 +726,7 @@ class HubSpotService {
       row.seatNumber = i + 1;
     });
 
-    // eslint-disable-next-line no-console
-    console.log(`[Registration] Done! ${rows.length} students`);
+    logger.info({ count: rows.length }, '[Registration] Done');
 
     const result = {
       rows,
