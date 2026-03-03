@@ -1,5 +1,184 @@
-
 # Changelog
+
+## v2.11.0 — Performance & Bundle Optimization (2026-03-03)
+
+Final remediation phase (Phase 10). Lazy-loaded route components, vendor chunk splitting, and centralized debounce hook. Initial JS bundle reduced from ~890KB to ~450KB.
+
+### New Files
+
+| File                                | Purpose                                                          |
+| ----------------------------------- | ---------------------------------------------------------------- |
+| `frontend/src/hooks/useDebounce.js` | Generic debounce hook — `useDebounce(value, delay)` with cleanup |
+
+### Modified Files
+
+| File                                             | What Changed                                                                                                                                             |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `frontend/src/router.jsx`                        | `React.lazy()` for ScheduleView, RegistrationList, AnalyticsDashboard. Skeleton fallback components. `ErrorBoundary > Suspense > LazyComponent` ordering |
+| `frontend/vite.config.js`                        | `manualChunks` for vendor splitting (react, query, forms, ui). `chunkSizeWarningLimit: 300`                                                              |
+| `frontend/src/components/ContactSearch.jsx`      | Replaced manual setTimeout debounce with `useDebounce`. Smart timing preserved (100ms for >10 chars, 300ms otherwise). Placeholder prop forwarded        |
+| `frontend/src/components/RegistrationList.jsx`   | Added 300ms debounce on search filter via `useDebounce`. Instant clear bypass pattern. `hasActiveFilters` includes searchQuery                           |
+| `frontend/src/components/ErrorBoundary.jsx`      | Chunk load failure detection — `window.location.reload()` for dynamic import errors instead of soft retry                                                |
+| `frontend/src/__tests__/hooks/useHooks.test.jsx` | 6 new useDebounce tests (171 total frontend tests)                                                                                                       |
+
+### Vendor Chunks
+
+| Chunk          | Libraries                                 |
+| -------------- | ----------------------------------------- |
+| `vendor-react` | react, react-dom, react-router-dom        |
+| `vendor-query` | @tanstack/react-query, axios              |
+| `vendor-forms` | react-hook-form, @hookform/resolvers, zod |
+| `vendor-ui`    | sonner, zustand                           |
+
+Recharts (~370KB) co-locates with the lazy AnalyticsDashboard chunk — only loads on `/analytics` navigation.
+
+---
+
+## v2.10.0 — Comprehensive Testing Suite (2026-03-03)
+
+Remediation Phase 9. Backend tests: 18 → 133 (15 suites). Frontend tests: 6 → 165 (17 files). Coverage thresholds enforced in CI.
+
+### New Files (Backend)
+
+| File                                             | Purpose                                                     |
+| ------------------------------------------------ | ----------------------------------------------------------- |
+| `__tests__/services/bookingService.test.js`      | 14 unit tests — book/unbook/find/reset with mocked Prisma   |
+| `__tests__/services/cycleService.test.js`        | 16 unit tests — CRUD, lock/unlock, locked cycle guards      |
+| `__tests__/services/gridService.test.js`         | 11 unit tests — grid building, CSV export, station grouping |
+| `__tests__/services/analyticsService.test.js`    | 15 unit tests — seating/registration aggregation, dedup     |
+| `__tests__/services/registrationService.test.js` | 12 unit tests — HubSpot data assembly, history detection    |
+| `__tests__/routes/bookings.test.js`              | 14 integration tests (real SQLite)                          |
+| `__tests__/routes/analytics.test.js`             | 5 integration tests                                         |
+| `__tests__/routes/contacts.test.js`              | 5 integration tests                                         |
+| `__tests__/routes/registration.test.js`          | 6 integration tests                                         |
+| `__tests__/routes/grid.test.js`                  | 13 integration tests                                        |
+| `__tests__/prisma-mock.js`                       | Prisma mock factory with sequential $transaction support    |
+| `__tests__/factories.js`                         | Shared test data factories                                  |
+
+### New Files (Frontend)
+
+| File                                        | Purpose                                                                                                                                                                        |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/__tests__/components/*.test.jsx`       | 10 component test files (LoginPage, CycleTabs, FilterBar, SearchCriteriaForm, CellBookingDialog, ErrorBoundary, AppLayout, ScheduleView, RegistrationList, AnalyticsDashboard) |
+| `src/__tests__/schemas/schemas.test.js`     | 14 Zod schema validation tests                                                                                                                                                 |
+| `src/__tests__/stores/stores.test.js`       | 12 Zustand store tests                                                                                                                                                         |
+| `src/__tests__/hooks/useHooks.test.jsx`     | 25 TanStack Query hook tests                                                                                                                                                   |
+| `src/__tests__/hooks/useFocusTrap.test.jsx` | 5 focus trap tests                                                                                                                                                             |
+| `src/__tests__/api/api.test.js`             | 3 API client tests                                                                                                                                                             |
+| `src/__tests__/test-utils.jsx`              | `renderWithProviders` helper (QueryClient + Router + stores)                                                                                                                   |
+
+### Coverage Thresholds
+
+| Layer    | Lines | Functions | Branches | Statements |
+| -------- | ----- | --------- | -------- | ---------- |
+| Backend  | 70%   | 70%       | 70%      | 70%        |
+| Frontend | 35%   | 35%       | 20%      | 35%        |
+
+---
+
+## v2.9.0 — Design System & Accessibility (2026-03-03)
+
+Remediation Phase 8. CSS variable design system with 49 tokens, dark mode, semantic color migration, Sonner toasts, loading skeletons, focus traps, and ARIA landmarks.
+
+### New Files
+
+| File                                           | Purpose                                                                  |
+| ---------------------------------------------- | ------------------------------------------------------------------------ |
+| `frontend/src/stores/themeStore.js`            | Zustand theme store — `theme`, `toggleTheme()`, localStorage persistence |
+| `frontend/src/components/DarkModeToggle.jsx`   | Sun/Moon SVG toggle button                                               |
+| `frontend/src/components/ui/Skeleton.jsx`      | Shimmer skeleton + SkeletonText components                               |
+| `frontend/src/components/ui/SkeletonTable.jsx` | Table loading skeleton                                                   |
+| `frontend/src/hooks/useFocusTrap.js`           | Focus trap + Escape callback for dialog accessibility                    |
+| `frontend/src/hooks/useRegistration.js`        | TanStack Query hooks for registration list                               |
+| `frontend/src/hooks/useAnalytics.js`           | TanStack Query hooks for analytics data                                  |
+| `frontend/src/lib/chartTheme.js`               | CSS variables → hex for Recharts, reactive to theme toggle               |
+
+### Key Changes
+
+- **49 CSS variable tokens** in `:root` (light) and `.dark` (dark mode) — layout, semantic, grid, chart
+- **318+ hardcoded Tailwind classes** replaced with semantic tokens across 15 components
+- **Dark mode:** FOUC prevention inline script in `index.html`, localStorage persistence
+- **Sonner toasts** replace inline error/success banners in ScheduleView, CycleTabs, RegistrationList
+- **Focus traps** on 5 dialogs with Tab cycling and Escape callback
+- **ARIA:** `<nav>`, `<main>` landmarks, `role="dialog"`, `aria-modal`, `aria-label` on icon buttons, `aria-selected` on tabs
+- **Styled confirm dialog** replaces native `confirm()` in AvailabilityGrid
+
+---
+
+## v2.8.0 — Frontend Modernization (2026-03-03)
+
+Remediation Phase 7. React Router, Zustand, TanStack Query, React Hook Form + Zod. App.jsx decomposed from 545 lines to ~17 lines.
+
+### New Dependencies
+
+react-router-dom, zustand, @tanstack/react-query, react-hook-form, @hookform/resolvers, zod
+
+### Architecture Changes
+
+- **Routing:** `createBrowserRouter` — `/login`, `/schedule`, `/registration`, `/analytics`
+- **State:** Zustand stores (`authStore`, `scheduleStore`) replace prop drilling
+- **Server state:** TanStack Query hooks replace manual `useEffect` + fetch
+- **Forms:** React Hook Form + Zod validation on login, search, booking, cycle creation
+- **App.jsx:** Providers only (QueryClientProvider + RouterProvider + Toaster)
+- **New files:** `router.jsx`, `AppLayout.jsx`, `ScheduleView.jsx`, `ErrorBoundary.jsx`, 4 stores, 4 hook files, 4 schema files
+- **API client:** Error swallowing removed from 7 functions
+
+---
+
+## v2.7.0 — API Docs & Backend Hardening (2026-03-03)
+
+Remediation Phase 6. OpenAPI/Swagger documentation, response compression, audit logging, paginated response helper.
+
+### Key Changes
+
+- **Swagger UI** at `/api/docs` (disabled in production), 23 endpoints documented with OpenAPI 3.0
+- **Response compression** via `compression` middleware (gzip/brotli)
+- **Audit logging:** pino-http logs user role + sanitized request body on mutations (password/token stripped, 1KB truncated)
+- **`respond.paginated()`** helper for future paginated endpoints
+- **Frontend:** `openapi-typescript` devDep + `npm run generate:types` script
+
+---
+
+## v2.6.0 — Backend TypeScript Migration (2026-03-03)
+
+Remediation Phase 5. All 29 backend `src/` files migrated from JavaScript to TypeScript. `strict: true` + `noUncheckedIndexedAccess: true`.
+
+### Key Changes
+
+- **29 `.js` → `.ts` files** in `backend/src/` + `prisma/seed.ts`
+- **3 type definition files:** `types/index.ts` (domain), `types/hubspot.ts` (HubSpot API), `types/express.d.ts` (req.user)
+- **Dev tooling:** `tsx watch` for dev, `tsc` → `dist/` for prod build
+- **ESLint:** `typescript-eslint` v8 with `@typescript-eslint/no-unused-vars`
+- **CI:** Added `npm run typecheck` + `npm run build` steps
+- **Tests stay `.js`** — `ts-jest` handles `.ts` imports
+
+---
+
+## v2.5.1 — DB Hardening & Structured Logging (2026-03-03)
+
+Remediation Phase 4. Prisma cascade rules, database indexes, Pino structured logging, console.\* elimination.
+
+### Key Changes
+
+- **Cascades:** `onDelete: Cascade` on Cycle→Booking, Cycle→CycleWeek. `Restrict` on Station→Booking
+- **Indexes:** `@@index([cycleId, shift, week])`, `@@index([contactId])` on Booking
+- **Pino logger:** Structured JSON logging, pino-http middleware with header redaction, Prisma event routing
+- **All `console.*` eliminated** from `src/` — ESLint `no-console: 'error'`
+
+---
+
+## v2.5.0.1 — Developer Tooling (2026-02-27)
+
+Remediation Phase 3. ESLint 9, Prettier, Husky + lint-staged, GitHub Actions CI.
+
+### Key Changes
+
+- **ESLint 9** flat config (backend `.mjs`, frontend with React plugin)
+- **Prettier** code formatting with lint-staged pre-commit hooks
+- **Husky** pre-commit: lint + format check
+- **GitHub Actions CI:** lint → format:check → build → test pipeline
+
+---
 
 ## v2.5.0 — PDF Export for Analytics (2026-02-27)
 
@@ -7,11 +186,11 @@ Added one-click PDF export to the Analytics Dashboard. Captures all summary card
 
 ### Modified Files
 
-| File | What Changed |
-|------|-------------|
+| File                                             | What Changed                                                                                                                                                                                                                                                           |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `frontend/src/components/AnalyticsDashboard.jsx` | PDF export button, `handleExportPDF` (html-to-image + jsPDF), frosted glass overlay, Escape-to-cancel, `data-pdf-hide` on interactive elements, `display: none` before capture, per-section capture with smart page breaks, canvas memory cleanup, named PDF constants |
-| `frontend/src/App.jsx` | Added Sonner `<Toaster>` component for toast notifications |
-| `frontend/package.json` | Added `html-to-image`, `jspdf`, `sonner` dependencies |
+| `frontend/src/App.jsx`                           | Added Sonner `<Toaster>` component for toast notifications                                                                                                                                                                                                             |
+| `frontend/package.json`                          | Added `html-to-image`, `jspdf`, `sonner` dependencies                                                                                                                                                                                                                  |
 
 ### How It Works
 
@@ -41,28 +220,28 @@ Added a full-page analytics dashboard that visualizes seating occupancy and regi
 
 ### New Files
 
-| File | Purpose |
-|------|---------|
-| `backend/src/schemas/analytics.js` | Joi validation for analytics query params (year, cycleId, shift) |
-| `backend/src/services/analyticsService.js` | Seating + registration analytics aggregation logic |
-| `backend/src/routes/analytics.js` | Two GET endpoints: `/seating` and `/registration` |
-| `frontend/src/components/AnalyticsDashboard.jsx` | Full analytics dashboard with Recharts visualizations |
+| File                                             | Purpose                                                          |
+| ------------------------------------------------ | ---------------------------------------------------------------- |
+| `backend/src/schemas/analytics.js`               | Joi validation for analytics query params (year, cycleId, shift) |
+| `backend/src/services/analyticsService.js`       | Seating + registration analytics aggregation logic               |
+| `backend/src/routes/analytics.js`                | Two GET endpoints: `/seating` and `/registration`                |
+| `frontend/src/components/AnalyticsDashboard.jsx` | Full analytics dashboard with Recharts visualizations            |
 
 ### Modified Files
 
-| File | What Changed |
-|------|-------------|
-| `backend/src/app.js` | Mounted analytics router on `/api/v1/analytics` |
-| `frontend/package.json` | Added `recharts` dependency |
-| `frontend/src/api.js` | Added `fetchSeatingAnalytics()` and `fetchRegistrationAnalytics()` |
-| `frontend/src/App.jsx` | Analytics button in header, `currentView === 'analytics'` routing, hides CycleTabs/ViewToggle in analytics view |
+| File                    | What Changed                                                                                                    |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `backend/src/app.js`    | Mounted analytics router on `/api/v1/analytics`                                                                 |
+| `frontend/package.json` | Added `recharts` dependency                                                                                     |
+| `frontend/src/api.js`   | Added `fetchSeatingAnalytics()` and `fetchRegistrationAnalytics()`                                              |
+| `frontend/src/App.jsx`  | Analytics button in header, `currentView === 'analytics'` routing, hides CycleTabs/ViewToggle in analytics view |
 
 ### New API Endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/v1/analytics/seating?year=2026&cycleId=1` | Seating occupancy analytics with cross-tab matrix |
-| GET | `/api/v1/analytics/registration?year=2026&shift=BOTH&cycleId=1` | Registration analytics (payment, cycle count, programs) |
+| Method | Path                                                            | Description                                             |
+| ------ | --------------------------------------------------------------- | ------------------------------------------------------- |
+| GET    | `/api/v1/analytics/seating?year=2026&cycleId=1`                 | Seating occupancy analytics with cross-tab matrix       |
+| GET    | `/api/v1/analytics/registration?year=2026&shift=BOTH&cycleId=1` | Registration analytics (payment, cycle count, programs) |
 
 ### Seating Analytics Response
 
@@ -88,7 +267,9 @@ Added a full-page analytics dashboard that visualizes seating occupancy and regi
     "paymentDistribution": [{ "status": "Closed Won", "count": 60 }],
     "cycleCountDistribution": [{ "cycleNumber": 1, "count": 45 }],
     "programCounts": { "roadmap": 30, "afk": 12, "acj": 8 },
-    "warnings": [{ "cycleId": 2, "cycleName": "Cycle 2", "shift": "AM", "error": "HubSpot API not configured" }]
+    "warnings": [
+      { "cycleId": 2, "cycleName": "Cycle 2", "shift": "AM", "error": "HubSpot API not configured" }
+    ]
   }
 }
 ```
@@ -122,35 +303,35 @@ Routes (thin adapters) → Services (business logic) → Prisma (DB)
 
 ### New Files
 
-| File | Purpose |
-|------|---------|
-| `src/lib/AppError.js` | Custom error class with statusCode, message, details |
-| `src/middleware/validate.js` | Joi validation middleware (bracket notation for array paths) |
-| `src/middleware/errorHandler.js` | Global error handler — AppError + Prisma P2025/P2002/P2003 |
-| `src/middleware/respond.js` | Response envelope helpers: `ok()`, `list()`, `created()` |
-| `src/schemas/cycles.js` | Joi schemas for all cycle endpoints |
-| `src/schemas/bookings.js` | Joi schemas for book/unbook/find/reset |
-| `src/schemas/grid.js` | Joi schemas for grid + export |
-| `src/schemas/contacts.js` | Joi schemas for contact search/details/payment |
-| `src/schemas/registration.js` | Joi schemas for registration list + export |
-| `src/services/cycleService.js` | Cycle CRUD business logic (create, lock, delete with transaction) |
-| `src/services/bookingService.js` | Booking logic (book with P2002 race handling, unbook, find, reset) |
-| `src/services/gridService.js` | Grid builder + CSV export (parallel DB queries) |
-| `src/services/registrationService.js` | Registration list + CSV export from HubSpot |
-| `__tests__/validation.test.js` | 7 tests for Joi validation + error handler |
+| File                                  | Purpose                                                            |
+| ------------------------------------- | ------------------------------------------------------------------ |
+| `src/lib/AppError.js`                 | Custom error class with statusCode, message, details               |
+| `src/middleware/validate.js`          | Joi validation middleware (bracket notation for array paths)       |
+| `src/middleware/errorHandler.js`      | Global error handler — AppError + Prisma P2025/P2002/P2003         |
+| `src/middleware/respond.js`           | Response envelope helpers: `ok()`, `list()`, `created()`           |
+| `src/schemas/cycles.js`               | Joi schemas for all cycle endpoints                                |
+| `src/schemas/bookings.js`             | Joi schemas for book/unbook/find/reset                             |
+| `src/schemas/grid.js`                 | Joi schemas for grid + export                                      |
+| `src/schemas/contacts.js`             | Joi schemas for contact search/details/payment                     |
+| `src/schemas/registration.js`         | Joi schemas for registration list + export                         |
+| `src/services/cycleService.js`        | Cycle CRUD business logic (create, lock, delete with transaction)  |
+| `src/services/bookingService.js`      | Booking logic (book with P2002 race handling, unbook, find, reset) |
+| `src/services/gridService.js`         | Grid builder + CSV export (parallel DB queries)                    |
+| `src/services/registrationService.js` | Registration list + CSV export from HubSpot                        |
+| `__tests__/validation.test.js`        | 7 tests for Joi validation + error handler                         |
 
 ### Modified Files
 
-| File | What Changed |
-|------|-------------|
-| `src/app.js` | v1 Router groups all protected routes under `/api/v1/`, errorHandler mounted last |
-| `src/hubspot.js` | Removed redundant `dotenv.config()`, uses `config.hubspotApiKey` |
-| `src/routes/cycles.js` | Rewritten as thin adapter: validate → service → respond |
-| `src/routes/bookings.js` | Rewritten as thin adapter with Joi validation |
-| `src/routes/grid.js` | Rewritten as thin adapter, CSV stays without envelope |
-| `src/routes/contacts.js` | Added Joi validation including payment status body |
-| `src/routes/registration.js` | Full refactor: Joi params/query validation, service calls |
-| `frontend/src/api.js` | All paths → `/api/v1/`, envelope unwrap (`res.data.data`), auth stays `/api/auth/` |
+| File                         | What Changed                                                                       |
+| ---------------------------- | ---------------------------------------------------------------------------------- |
+| `src/app.js`                 | v1 Router groups all protected routes under `/api/v1/`, errorHandler mounted last  |
+| `src/hubspot.js`             | Removed redundant `dotenv.config()`, uses `config.hubspotApiKey`                   |
+| `src/routes/cycles.js`       | Rewritten as thin adapter: validate → service → respond                            |
+| `src/routes/bookings.js`     | Rewritten as thin adapter with Joi validation                                      |
+| `src/routes/grid.js`         | Rewritten as thin adapter, CSV stays without envelope                              |
+| `src/routes/contacts.js`     | Added Joi validation including payment status body                                 |
+| `src/routes/registration.js` | Full refactor: Joi params/query validation, service calls                          |
+| `frontend/src/api.js`        | All paths → `/api/v1/`, envelope unwrap (`res.data.data`), auth stays `/api/auth/` |
 
 ### API Response Envelope
 
@@ -193,44 +374,44 @@ Added authentication, CORS lockdown, security headers, rate limiting, input sani
 
 ### New Files
 
-| File | Purpose |
-|------|---------|
-| `src/middleware/auth.js` | JWT authentication via HttpOnly cookies (`requireAuth` middleware) |
-| `src/routes/auth.js` | Login, logout, auth check endpoints (`/api/auth/*`) |
-| `frontend/src/components/LoginPage.jsx` | Password login form with session persistence |
+| File                                    | Purpose                                                            |
+| --------------------------------------- | ------------------------------------------------------------------ |
+| `src/middleware/auth.js`                | JWT authentication via HttpOnly cookies (`requireAuth` middleware) |
+| `src/routes/auth.js`                    | Login, logout, auth check endpoints (`/api/auth/*`)                |
+| `frontend/src/components/LoginPage.jsx` | Password login form with session persistence                       |
 
 ### Modified Files
 
-| File | What Changed |
-|------|-------------|
-| `src/app.js` | Helmet, CORS with `ALLOWED_ORIGINS`, rate limiting (300/15min + 30/min HubSpot), cookie-parser, auth routes mounted |
-| `src/config.js` | Added `jwtSecret`, `adminPasswordHash`, `nodeEnv`. Production env var validation with `process.exit(1)` |
-| `frontend/src/config.js` | Removed `window.__API_BASE__` XSS vector |
-| `frontend/src/App.jsx` | Added auth state, login page, 401 interceptor auto-logout |
-| `frontend/src/api.js` | Added `login()`, `logout()`, `checkAuth()` functions |
-| `.gitignore` | Added `*.db`, `*.db-shm`, `*.db-wal` |
+| File                     | What Changed                                                                                                        |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `src/app.js`             | Helmet, CORS with `ALLOWED_ORIGINS`, rate limiting (300/15min + 30/min HubSpot), cookie-parser, auth routes mounted |
+| `src/config.js`          | Added `jwtSecret`, `adminPasswordHash`, `nodeEnv`. Production env var validation with `process.exit(1)`             |
+| `frontend/src/config.js` | Removed `window.__API_BASE__` XSS vector                                                                            |
+| `frontend/src/App.jsx`   | Added auth state, login page, 401 interceptor auto-logout                                                           |
+| `frontend/src/api.js`    | Added `login()`, `logout()`, `checkAuth()` functions                                                                |
+| `.gitignore`             | Added `*.db`, `*.db-shm`, `*.db-wal`                                                                                |
 
 ### Security Measures
 
-| Measure | Implementation |
-|---------|---------------|
-| Authentication | JWT in HttpOnly cookies, 8-hour expiry |
-| CORS | Restricted to `ALLOWED_ORIGINS` env var (comma-separated) |
-| Security Headers | Helmet middleware (CSP, HSTS, X-Frame-Options, etc.) |
-| Rate Limiting | 300 req/15min general, 30 req/min on HubSpot contact search |
-| Input Sanitization | traineeName regex + length validation, contact ID numeric check |
-| Error Leaks | All `err.message` exposures replaced with generic messages |
-| XSS Prevention | Removed `window.__API_BASE__` global injection point |
-| Prod Validation | Missing `JWT_SECRET`/`DATABASE_URL` in production = process.exit(1) |
+| Measure            | Implementation                                                      |
+| ------------------ | ------------------------------------------------------------------- |
+| Authentication     | JWT in HttpOnly cookies, 8-hour expiry                              |
+| CORS               | Restricted to `ALLOWED_ORIGINS` env var (comma-separated)           |
+| Security Headers   | Helmet middleware (CSP, HSTS, X-Frame-Options, etc.)                |
+| Rate Limiting      | 300 req/15min general, 30 req/min on HubSpot contact search         |
+| Input Sanitization | traineeName regex + length validation, contact ID numeric check     |
+| Error Leaks        | All `err.message` exposures replaced with generic messages          |
+| XSS Prevention     | Removed `window.__API_BASE__` global injection point                |
+| Prod Validation    | Missing `JWT_SECRET`/`DATABASE_URL` in production = process.exit(1) |
 
 ### New Environment Variables
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `JWT_SECRET` | Prod only | Secret for signing JWT tokens |
-| `ADMIN_PASSWORD` | Always | Admin login password (default: `admin123` for dev) |
-| `ALLOWED_ORIGINS` | Prod only | Comma-separated allowed CORS origins |
-| `NODE_ENV` | Prod only | Set to `production` for strict validation |
+| Variable          | Required  | Description                                        |
+| ----------------- | --------- | -------------------------------------------------- |
+| `JWT_SECRET`      | Prod only | Secret for signing JWT tokens                      |
+| `ADMIN_PASSWORD`  | Always    | Admin login password (default: `admin123` for dev) |
+| `ALLOWED_ORIGINS` | Prod only | Comma-separated allowed CORS origins               |
+| `NODE_ENV`        | Prod only | Set to `production` for strict validation          |
 
 ---
 
@@ -241,39 +422,44 @@ Added the Registration List feature (Part 2) — a per-cycle table showing all e
 ### Backend Changes
 
 #### New Files
-| File | Purpose |
-|------|---------|
-| `src/routes/registration.js` | Registration list JSON + CSV export endpoints |
-| `prisma/migrations/..._add_course_codes_to_cycle/` | Adds `course_codes` column to cycles table |
+
+| File                                               | Purpose                                       |
+| -------------------------------------------------- | --------------------------------------------- |
+| `src/routes/registration.js`                       | Registration list JSON + CSV export endpoints |
+| `prisma/migrations/..._add_course_codes_to_cycle/` | Adds `course_codes` column to cycles table    |
 
 #### Modified Files
-| File | What Changed |
-|------|-------------|
-| `prisma/schema.prisma` | Added `courseCodes String? @map("course_codes")` to Cycle model |
-| `src/app.js` | Mounted registration router on `/api/cycles` |
-| `src/routes/cycles.js` | POST accepts `courseCodes` array, GET returns parsed codes, new `PATCH /:id/course-codes` endpoint |
-| `src/hubspot.js` | Added batch association helpers (v4 API), `searchLineItemsByName`, `buildRegistrationList` orchestrator, rate limiter (90 req/10s), 60s registration cache |
+
+| File                   | What Changed                                                                                                                                               |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `prisma/schema.prisma` | Added `courseCodes String? @map("course_codes")` to Cycle model                                                                                            |
+| `src/app.js`           | Mounted registration router on `/api/cycles`                                                                                                               |
+| `src/routes/cycles.js` | POST accepts `courseCodes` array, GET returns parsed codes, new `PATCH /:id/course-codes` endpoint                                                         |
+| `src/hubspot.js`       | Added batch association helpers (v4 API), `searchLineItemsByName`, `buildRegistrationList` orchestrator, rate limiter (90 req/10s), 60s registration cache |
 
 #### New API Endpoints
-| Method | Path | Description |
-|--------|------|-------------|
-| PATCH | `/api/cycles/:id/course-codes` | Update course codes for a cycle |
-| GET | `/api/cycles/:id/registration?shift=AM` | Fetch registration list from HubSpot |
-| GET | `/api/cycles/:id/registration/export?shift=AM` | Download registration list as CSV |
+
+| Method | Path                                           | Description                          |
+| ------ | ---------------------------------------------- | ------------------------------------ |
+| PATCH  | `/api/cycles/:id/course-codes`                 | Update course codes for a cycle      |
+| GET    | `/api/cycles/:id/registration?shift=AM`        | Fetch registration list from HubSpot |
+| GET    | `/api/cycles/:id/registration/export?shift=AM` | Download registration list as CSV    |
 
 ### Frontend Changes
 
 #### New Files
-| File | Purpose |
-|------|---------|
+
+| File                              | Purpose                                                                                                             |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | `components/RegistrationList.jsx` | Full registration table: AM/PM toggle, search/filter, refresh, CSV export, payment badges, edit course codes dialog |
 
 #### Modified Files
-| File | What Changed |
-|------|-------------|
-| `App.jsx` | Added view toggle (Seating Grid / Registration List), `currentView` state, `RegistrationList` rendering, `handleUpdateCourseCodes` handler |
-| `components/CycleTabs.jsx` | Added course codes textarea to create cycle dialog |
-| `api.js` | `createCycle` now sends `courseCodes`, added `fetchRegistrationList`, `exportRegistrationList`, `updateCourseCodes` |
+
+| File                       | What Changed                                                                                                                               |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `App.jsx`                  | Added view toggle (Seating Grid / Registration List), `currentView` state, `RegistrationList` rendering, `handleUpdateCourseCodes` handler |
+| `components/CycleTabs.jsx` | Added course codes textarea to create cycle dialog                                                                                         |
+| `api.js`                   | `createCycle` now sends `courseCodes`, added `fetchRegistrationList`, `exportRegistrationList`, `updateCourseCodes`                        |
 
 ### HubSpot Integration Details
 
@@ -293,9 +479,11 @@ Added the Registration List feature (Part 2) — a per-cycle table showing all e
 **Performance:** Uses HubSpot v4 batch association API to minimize API calls (~15-25 calls for 100+ students instead of 500+). 60-second cache per cycle+shift.
 
 ### Registration Table Columns (15)
+
 Seat #, First Name, Last Name, Email, Phone, Student ID, Course Start, Course End, Registration Date, Payment Status, Outstanding, Cycle Count, Roadmap, AFK, ACJ
 
 ### Tests
+
 All 12 existing tests pass (6 backend + 6 frontend) — zero regressions.
 
 ---
@@ -315,43 +503,47 @@ Major rewrite: replaced Excel (Test.xlsx) with a proper database via Prisma ORM,
 ### Backend Changes
 
 #### New Files
-| File | Purpose |
-|------|---------|
-| `prisma/schema.prisma` | Database schema: Lab, Station, Cycle, Booking models |
-| `prisma/seed.js` | Seeds 6 labs with station counts, LH/RH sides, and initial cycle |
-| `src/db.js` | Prisma client singleton |
-| `src/hubspot.js` | HubSpot CRM service (moved from `api/backend/hubspot.js`) |
-| `src/routes/cycles.js` | Cycle CRUD: list, create, lock, unlock |
-| `.env.example` | Documents required environment variables |
+
+| File                   | Purpose                                                          |
+| ---------------------- | ---------------------------------------------------------------- |
+| `prisma/schema.prisma` | Database schema: Lab, Station, Cycle, Booking models             |
+| `prisma/seed.js`       | Seeds 6 labs with station counts, LH/RH sides, and initial cycle |
+| `src/db.js`            | Prisma client singleton                                          |
+| `src/hubspot.js`       | HubSpot CRM service (moved from `api/backend/hubspot.js`)        |
+| `src/routes/cycles.js` | Cycle CRUD: list, create, lock, unlock                           |
+| `.env.example`         | Documents required environment variables                         |
 
 #### Rewritten Files
-| File | What Changed |
-|------|-------------|
-| `package.json` | Removed `exceljs`, `node-cache`, `redis`. Added `@prisma/client`, `prisma`. Version bumped to 2.0.0 |
-| `src/index.js` | Mounts `/api/cycles` router. Removed `watchFile()` import. Added health check endpoint |
-| `src/config.js` | Simplified to just `port`, `databaseUrl`, `hubspotApiKey`. Removed all Graph/OneDrive/Redis/cache config |
+
+| File                         | What Changed                                                                                                                                                              |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `package.json`               | Removed `exceljs`, `node-cache`, `redis`. Added `@prisma/client`, `prisma`. Version bumped to 2.0.0                                                                       |
+| `src/index.js`               | Mounts `/api/cycles` router. Removed `watchFile()` import. Added health check endpoint                                                                                    |
+| `src/config.js`              | Simplified to just `port`, `databaseUrl`, `hubspotApiKey`. Removed all Graph/OneDrive/Redis/cache config                                                                  |
 | `src/routes/availability.js` | Complete rewrite — all endpoints now use Prisma queries + require `cycleId`. Added cycle lock checking (403). Export changed from Excel to CSV. Added `side: ALL` support |
-| `Dockerfile.dev` | Node 18 -> 20. Added `prisma generate` and `prisma migrate deploy` |
-| `Dockerfile.prod` | Node 18 -> 20. Added `prisma generate` and `prisma migrate deploy` |
+| `Dockerfile.dev`             | Node 18 -> 20. Added `prisma generate` and `prisma migrate deploy`                                                                                                        |
+| `Dockerfile.prod`            | Node 18 -> 20. Added `prisma generate` and `prisma migrate deploy`                                                                                                        |
 
 #### Deleted Files
-| File | Reason |
-|------|--------|
-| `src/excel-loader.js` | Replaced by Prisma queries |
-| `src/msgraph.js` | No OneDrive needed |
-| `src/watch.js` | No file to watch |
-| `src/cache.js` | Database queries are fast enough |
-| `data/Test.xlsx` | No Excel |
-| `excel.js` | Legacy |
-| `auth.js` | Unused legacy auth |
-| `auth/` directory | Unused legacy auth |
-| `routes/graphRoutes.js` | Legacy Graph API routes |
-| `test-download-url.js` | Legacy |
+
+| File                      | Reason                                  |
+| ------------------------- | --------------------------------------- |
+| `src/excel-loader.js`     | Replaced by Prisma queries              |
+| `src/msgraph.js`          | No OneDrive needed                      |
+| `src/watch.js`            | No file to watch                        |
+| `src/cache.js`            | Database queries are fast enough        |
+| `data/Test.xlsx`          | No Excel                                |
+| `excel.js`                | Legacy                                  |
+| `auth.js`                 | Unused legacy auth                      |
+| `auth/` directory         | Unused legacy auth                      |
+| `routes/graphRoutes.js`   | Legacy Graph API routes                 |
+| `test-download-url.js`    | Legacy                                  |
 | `api/` directory (entire) | Duplicated backend for Vercel — deleted |
 
 #### API Changes
 
 **New endpoints:**
+
 - `GET /api/cycles` — List all cycles
 - `POST /api/cycles` — Create next cycle for year
 - `PATCH /api/cycles/:id/lock` — Lock cycle
@@ -360,19 +552,21 @@ Major rewrite: replaced Excel (Test.xlsx) with a proper database via Prisma ORM,
 
 **Modified endpoints (all now require `cycleId`):**
 
-| Old Signature | New Signature |
-|---------------|--------------|
-| `POST /grid { lab, shift }` | `POST /grid { cycleId, shift, labType, side }` |
-| `POST /book { lab, station, shift, weeks, traineeName }` | `POST /book { cycleId, stationId, shift, weeks, traineeName, contactId? }` |
-| `POST /unbook { lab, station, shift, weeks }` | `POST /unbook { cycleId, stationId, shift, weeks }` |
+| Old Signature                                                  | New Signature                                                                   |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `POST /grid { lab, shift }`                                    | `POST /grid { cycleId, shift, labType, side }`                                  |
+| `POST /book { lab, station, shift, weeks, traineeName }`       | `POST /book { cycleId, stationId, shift, weeks, traineeName, contactId? }`      |
+| `POST /unbook { lab, station, shift, weeks }`                  | `POST /unbook { cycleId, stationId, shift, weeks }`                             |
 | `POST /find { shift, startWeek, endWeek, weeksNeeded, level }` | `POST /find { cycleId, shift, labType, side, startWeek, endWeek, weeksNeeded }` |
-| `POST /reset` (no body) | `POST /reset { cycleId }` |
-| `GET /export` (downloads .xlsx) | `GET /export?cycleId=X` (downloads .csv) |
+| `POST /reset` (no body)                                        | `POST /reset { cycleId }`                                                       |
+| `GET /export` (downloads .xlsx)                                | `GET /export?cycleId=X` (downloads .csv)                                        |
 
 **Removed endpoints:**
+
 - `POST /invalidate` — No cache to invalidate
 
 **Unchanged endpoints:**
+
 - `GET /contacts/search`
 - `GET /contacts/:id`
 - `PATCH /contacts/:id/payment-status`
@@ -382,29 +576,33 @@ Major rewrite: replaced Excel (Test.xlsx) with a proper database via Prisma ORM,
 ### Frontend Changes
 
 #### New Components (extracted from 1110-line `AvailabiltyFinder.jsx`)
-| Component | Purpose |
-|-----------|---------|
-| `CycleTabs.jsx` | Chrome-style tabs with lock icon, "+" button to create cycles |
-| `FilterBar.jsx` | Shift (AM/PM) + Lab Type (Regular/Pre-Exam) + Side (All/LH/RH) dropdowns |
+
+| Component                | Purpose                                                                                  |
+| ------------------------ | ---------------------------------------------------------------------------------------- |
+| `CycleTabs.jsx`          | Chrome-style tabs with lock icon, "+" button to create cycles                            |
+| `FilterBar.jsx`          | Shift (AM/PM) + Lab Type (Regular/Pre-Exam) + Side (All/LH/RH) dropdowns                 |
 | `SearchCriteriaForm.jsx` | Week range + consecutive weeks needed (level and stationType removed — now in FilterBar) |
-| `BookingSection.jsx` | Contact search + trainee name + book button with locked-cycle awareness |
-| `SearchResults.jsx` | Ranked availability results list |
-| `AvailabilityGrid.jsx` | Full-width interactive grid with lab group headers, drag-select, search, always visible |
-| `StudentInfoDialog.jsx` | Student info popup with HubSpot data and deals |
-| `CellBookingDialog.jsx` | Modal for booking from grid cell click |
+| `BookingSection.jsx`     | Contact search + trainee name + book button with locked-cycle awareness                  |
+| `SearchResults.jsx`      | Ranked availability results list                                                         |
+| `AvailabilityGrid.jsx`   | Full-width interactive grid with lab group headers, drag-select, search, always visible  |
+| `StudentInfoDialog.jsx`  | Student info popup with HubSpot data and deals                                           |
+| `CellBookingDialog.jsx`  | Modal for booking from grid cell click                                                   |
 
 #### Rewritten Files
-| File | What Changed |
-|------|-------------|
-| `App.jsx` | Complete rewrite as orchestrator. Layout: CycleTabs -> FilterBar -> [Search + Booking + Results] top row -> Full-width Grid below |
-| `api.js` | All functions now take `cycleId`. Added `fetchCycles()`, `createCycle()`, `lockCycle()`, `unlockCycle()`, `exportCycle()`. Removed `invalidateCache()`, `exportExcel()`. Changed `fetchGrid()` signature from `(lab, shift)` to `(cycleId, shift, labType, side)` |
+
+| File      | What Changed                                                                                                                                                                                                                                                      |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `App.jsx` | Complete rewrite as orchestrator. Layout: CycleTabs -> FilterBar -> [Search + Booking + Results] top row -> Full-width Grid below                                                                                                                                 |
+| `api.js`  | All functions now take `cycleId`. Added `fetchCycles()`, `createCycle()`, `lockCycle()`, `unlockCycle()`, `exportCycle()`. Removed `invalidateCache()`, `exportExcel()`. Changed `fetchGrid()` signature from `(lab, shift)` to `(cycleId, shift, labType, side)` |
 
 #### Deleted Files
-| File | Reason |
-|------|--------|
+
+| File                               | Reason                                 |
+| ---------------------------------- | -------------------------------------- |
 | `components/AvailabiltyFinder.jsx` | Split into 8 separate components above |
 
 #### Unchanged Files
+
 - `ContactSearch.jsx` — HubSpot search dropdown (kept as-is)
 - `config.js` — API base URL config
 - `main.jsx` — Entry point
@@ -414,12 +612,12 @@ Major rewrite: replaced Excel (Test.xlsx) with a proper database via Prisma ORM,
 
 ### Infrastructure Changes
 
-| File | What Changed |
-|------|-------------|
-| `docker-compose.dev.yml` | Added `postgres:16-alpine` service with healthcheck, volume, `DATABASE_URL` env |
+| File                      | What Changed                                                                    |
+| ------------------------- | ------------------------------------------------------------------------------- |
+| `docker-compose.dev.yml`  | Added `postgres:16-alpine` service with healthcheck, volume, `DATABASE_URL` env |
 | `docker-compose.prod.yml` | Added `postgres:16-alpine` service, `DATABASE_URL`, `POSTGRES_PASSWORD` env var |
-| `vercel.json` | Removed all `api/` route references (old serverless backend deleted) |
-| `backend/.env.example` | New — documents `DATABASE_URL`, `PORT`, `HUBSPOT_API_KEY` |
+| `vercel.json`             | Removed all `api/` route references (old serverless backend deleted)            |
+| `backend/.env.example`    | New — documents `DATABASE_URL`, `PORT`, `HUBSPOT_API_KEY`                       |
 
 ---
 
@@ -451,6 +649,7 @@ Currently using **SQLite** for local development. Schema is PostgreSQL-compatibl
 ---
 
 ### Pending TODOs
+
 - [ ] Set up PostgreSQL on Neon and connect to Vercel deployment
 - [ ] Switch `schema.prisma` from `sqlite` to `postgresql` for production
 - [ ] Configure `DATABASE_URL` in Vercel environment variables
