@@ -113,7 +113,27 @@ export interface RegistrationAnalyticsResult {
 
 // --- Respond helpers ---
 export interface Respond {
-  ok: (res: import('express').Response, data: unknown, message?: string) => void;
-  list: (res: import('express').Response, items: unknown[], message?: string) => void;
-  created: (res: import('express').Response, data: unknown, message?: string) => void;
+  ok: (
+    res: import('express').Response,
+    data: unknown,
+    message?: string,
+  ) => import('express').Response;
+  list: (
+    res: import('express').Response,
+    items: unknown[],
+    message?: string,
+  ) => import('express').Response;
+  created: (
+    res: import('express').Response,
+    data: unknown,
+    message?: string,
+  ) => import('express').Response;
+  paginated: (
+    res: import('express').Response,
+    items: unknown[],
+    total: number,
+    page: number,
+    limit: number,
+    message?: string,
+  ) => import('express').Response;
 }

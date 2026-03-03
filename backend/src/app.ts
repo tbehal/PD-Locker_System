@@ -3,9 +3,12 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import cookieParser from 'cookie-parser';
+import compression from 'compression';
+import swaggerUi from 'swagger-ui-express';
 import config from './config';
 import pinoHttp from 'pino-http';
 import logger from './logger';
+import swaggerSpec from './swagger';
 import { requireAuth } from './middleware/auth';
 import errorHandler from './middleware/errorHandler';
 
@@ -44,6 +47,7 @@ app.use(
 // Body parsing + cookies
 app.use(express.json());
 app.use(cookieParser());
+app.use(compression());
 
 // Request logging (skip health checks)
 app.use(
@@ -58,6 +62,21 @@ app.use(
           remoteAddress: req.remoteAddress,
         };
       },
+    },
+    customProps(req) {
+      const props: Record<string, unknown> = {};
+      const r = req as { user?: { role: string }; body?: Record<string, unknown> };
+      if (r.user) props.user = r.user.role;
+      if (['POST', 'PATCH', 'PUT', 'DELETE'].includes(req.method ?? '')) {
+        const body = r.body ?? {};
+        const { password: _pw, token: _tk, ...safeBody } = body;
+        if (Object.keys(safeBody).length > 0) {
+          const serialized = JSON.stringify(safeBody);
+          props.body =
+            serialized.length > 1024 ? serialized.slice(0, 1024) + '...[truncated]' : safeBody;
+        }
+      }
+      return props;
     },
   }),
 );
@@ -91,6 +110,12 @@ if (config.nodeEnv !== 'test') {
 app.get('/api/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// API documentation (disabled in production)
+if (config.nodeEnv !== 'production') {
+  app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+  app.get('/api/docs.json', (_req: Request, res: Response) => res.json(swaggerSpec));
+}
 
 app.use('/api/auth', authRouter);
 

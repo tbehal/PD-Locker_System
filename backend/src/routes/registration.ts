@@ -6,6 +6,49 @@ import * as registrationService from '../services/registrationService';
 
 const router = Router();
 
+/**
+ * @openapi
+ * /api/v1/cycles/{cycleId}/registration:
+ *   get:
+ *     tags: [Registration]
+ *     summary: Get registration list for a cycle
+ *     parameters:
+ *       - in: path
+ *         name: cycleId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: shift
+ *         schema:
+ *           type: string
+ *           enum: [AM, PM]
+ *           default: AM
+ *       - in: query
+ *         name: refresh
+ *         schema:
+ *           type: string
+ *           enum: [true]
+ *         description: Force cache refresh
+ *     responses:
+ *       200:
+ *         description: Registration list fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   $ref: '#/components/schemas/RegistrationResult'
+ *                 message:
+ *                   type: string
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ */
 router.get(
   '/:cycleId/registration',
   validate(schema.registrationParams, 'params'),
@@ -27,6 +70,39 @@ router.get(
   },
 );
 
+/**
+ * @openapi
+ * /api/v1/cycles/{cycleId}/registration/export:
+ *   get:
+ *     tags: [Registration]
+ *     summary: Export registration list as CSV
+ *     parameters:
+ *       - in: path
+ *         name: cycleId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: shift
+ *         schema:
+ *           type: string
+ *           enum: [AM, PM]
+ *           default: AM
+ *     responses:
+ *       200:
+ *         description: CSV file download
+ *         content:
+ *           text/csv:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ */
 router.get(
   '/:cycleId/registration/export',
   validate(schema.registrationParams, 'params'),
