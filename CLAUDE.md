@@ -6,20 +6,24 @@ NDECC Scheduler — a 12-week lab booking system for dental education. Single ad
 
 ## Tech Stack
 
-| Layer       | Tech                                          | Version   |
-| ----------- | --------------------------------------------- | --------- |
-| Frontend    | React + Vite                                  | 18.2, 7.1 |
-| Styling     | Tailwind CSS                                  | 3.3       |
-| Charts      | Recharts                                      | 3.7       |
-| HTTP Client | Axios                                         | 1.4       |
-| Backend     | Express.js (TypeScript)                       | 4.18      |
-| Language    | TypeScript (backend), JavaScript (frontend)   | 5.7       |
-| ORM         | Prisma                                        | 6.5       |
-| Database    | SQLite (dev), PostgreSQL (prod)               | —         |
-| Validation  | Joi                                           | 18.0      |
-| Auth        | JWT (HttpOnly cookies)                        | —         |
-| Testing     | Jest + Supertest (backend), Vitest (frontend) | —         |
-| Node        | >=20.19                                       | —         |
+| Layer           | Tech                                          | Version   |
+| --------------- | --------------------------------------------- | --------- |
+| Frontend        | React + Vite                                  | 18.2, 7.1 |
+| Routing         | React Router                                  | 7.x       |
+| Client State    | Zustand                                       | 5.x       |
+| Server State    | TanStack Query                                | 5.x       |
+| Form Validation | React Hook Form + Zod                         | 7.x, 3.x  |
+| Styling         | Tailwind CSS                                  | 3.3       |
+| Charts          | Recharts                                      | 3.7       |
+| HTTP Client     | Axios                                         | 1.4       |
+| Backend         | Express.js (TypeScript)                       | 4.18      |
+| Language        | TypeScript (backend), JavaScript (frontend)   | 5.7       |
+| ORM             | Prisma                                        | 6.5       |
+| Database        | SQLite (dev), PostgreSQL (prod)               | —         |
+| Validation (BE) | Joi                                           | 18.0      |
+| Auth            | JWT (HttpOnly cookies)                        | —         |
+| Testing         | Jest + Supertest (backend), Vitest (frontend) | —         |
+| Node            | >=20.19                                       | —         |
 
 ## Project Structure
 
@@ -50,10 +54,28 @@ NDECCSchedApp/
 ├── frontend/
 │   └── src/
 │       ├── main.jsx              # React mount
-│       ├── App.jsx               # Main orchestrator (state + view switching)
+│       ├── App.jsx               # Providers (QueryClient + Router + Toaster)
+│       ├── router.jsx            # React Router config (createBrowserRouter)
 │       ├── api.js                # Axios client (all API calls, 401 interceptor)
 │       ├── config.js             # API base URL
-│       └── components/           # Feature-specific React components
+│       ├── stores/               # Zustand stores
+│       │   ├── authStore.js      # Auth state (authenticated, setAuthenticated)
+│       │   └── scheduleStore.js  # UI state (activeCycleId, filters, searchCriteria)
+│       ├── hooks/                # TanStack Query hooks
+│       │   ├── useCycles.js      # Cycle CRUD + lock/unlock mutations
+│       │   ├── useGrid.js        # Grid data query (auto-refetch on filter change)
+│       │   ├── useBookings.js    # Book/unbook/reset/findCombinations mutations
+│       │   └── useContacts.js    # Contact search/lookup queries
+│       ├── schemas/              # Zod validation schemas
+│       │   ├── login.js          # Login form (password)
+│       │   ├── search.js         # Search criteria (startWeek, endWeek, weeksNeeded)
+│       │   ├── booking.js        # Booking form (traineeName, contactId)
+│       │   └── cycle.js          # Create cycle form (year, courseCodes)
+│       └── components/
+│           ├── AppLayout.jsx     # Auth guard + header + nav + CycleTabs + Outlet
+│           ├── ScheduleView.jsx  # Grid/search/booking orchestrator
+│           ├── ErrorBoundary.jsx # Catch render errors with retry UI
+│           └── ...               # Feature-specific components
 └── prisma/
     ├── schema.prisma             # DB schema (5 models)
     └── seed.ts                   # Seed data (6 labs, 133 stations)
@@ -218,26 +240,43 @@ Always check lock state in the service layer before mutating.
 - `axios.defaults.withCredentials = true` — cookies sent automatically
 - 401 responses dispatch `auth:unauthorized` custom event → triggers re-auth check
 
+### Routing
+
+- React Router v6 with `createBrowserRouter` in `router.jsx`
+- Routes: `/login` (standalone), `/schedule`, `/registration`, `/analytics` (wrapped in `AppLayout`)
+- `AppLayout` handles auth guard, header, nav links (`NavLink`), CycleTabs, and `<Outlet />`
+- URL is the source of truth for current view — no `currentView` state
+
+### State Management
+
+- **Zustand stores** for client state:
+  - `authStore` — `authenticated` (null = loading, true/false = known)
+  - `scheduleStore` — `activeCycleId`, `filters`, `searchCriteria`, `selectedCombination`, `reset()`
+- **TanStack Query** for server state:
+  - Query keys: `['cycles']`, `['grid', cycleId, shift, labType, side]`, `['contacts', ...]`
+  - Mutations invalidate related query keys on success (e.g., `bookSlot` invalidates `['grid']`)
+  - `staleTime: 30s`, `retry: 1` (configured in App.jsx `QueryClient`)
+- **Local state** for ephemeral UI (dialog state, search results, form inputs)
+
 ### Component Patterns
 
 - Functional components with hooks only
-- State lives in `App.jsx` and flows down via props
+- `App.jsx` is providers only (~17 lines): `QueryClientProvider` + `RouterProvider` + `Toaster`
+- `AppLayout.jsx` handles auth + chrome. `ScheduleView.jsx` handles grid/booking orchestration
 - Dialogs render `null` when their trigger state is falsy
 - Debounce search inputs (300ms for short queries, 100ms for pasted text)
+
+### Forms
+
+- React Hook Form + Zod for validation on: login, search criteria, booking, cell booking
+- Schemas in `schemas/` directory. Use `zodResolver` with `useForm`
+- Backend Joi validation is authoritative — Zod provides immediate UX feedback
 
 ### Styling
 
 - Tailwind CSS utility classes only — no CSS modules, no inline styles
 - Custom brand palette defined in `tailwind.config.js` (`brand-50` through `brand-900`, primary: `#0660B2`)
 - Fonts: `Montserrat` (headings/sans), `Karla` (body)
-
-### Views
-
-App uses state-based view switching (no router):
-
-- `currentView === 'grid'` → Schedule/Grid view
-- `currentView === 'registration'` → Registration list
-- `currentView === 'analytics'` → Analytics dashboard
 
 ---
 
@@ -404,9 +443,11 @@ cd frontend && npm test
 ### API Client (Frontend)
 
 - **Centralized error handling.** The 401 interceptor in `api.js` handles auth expiry globally. Don't add auth checks in individual components.
+- **API functions don't catch errors.** They throw on failure — TanStack Query catches errors and exposes them via `error` property. Only exceptions: `checkAuth()` (returns `false` on error), export functions (need blob handling).
 - **Always extract `response.data.data`.** Backend wraps everything in `{ data, message }`. The API client should unwrap this so components get clean data.
 - **Name API functions by what they do, not the HTTP method.** `fetchCycles()`, `bookSlot()`, `deleteBooking()` — not `getCycles()`, `postBooking()`, `deleteRequest()`.
 - **Group related API functions together** in `api.js` with comments marking sections (Auth, Cycles, Bookings, Contacts, Registration, Analytics).
+- **Use TanStack Query hooks** for data fetching — never `useEffect` + `fetch` in new code. Wrap API calls in `useQuery`/`useMutation` from the `hooks/` directory.
 
 ### Security
 
@@ -429,7 +470,7 @@ cd frontend && npm test
   });
   ```
 - **CSV exports should stream for large datasets.** Current exports build full CSV in memory — acceptable for 133 stations × 12 weeks but watch for growth.
-- **Avoid re-rendering entire grid on single cell changes.** When a booking is made/removed, update only the affected cell data — don't refetch the entire grid (optimize after TanStack Query is added).
+- **TanStack Query handles grid refetching.** Booking mutations invalidate `['grid']` automatically. Don't manually refetch — cache invalidation triggers it.
 
 ### Testing
 
@@ -475,12 +516,11 @@ cd frontend && npm test
 
 ## Known Limitations (See REMEDIATION.md)
 
-- Backend TypeScript complete (Phase 5). Frontend still JavaScript (planned Phase 7)
-- No React Router — state-based view switching (planned Phase 7)
-- No form validation library on frontend (planned Phase 7)
-- No ESLint/Prettier configured (planned Phase 3)
-- No CI/CD pipeline (planned Phase 3)
-- No structured logging (planned Phase 4)
+- Frontend stays JavaScript (no TypeScript migration planned)
+- RegistrationList and AnalyticsDashboard still use manual `useEffect`+`fetch` (not TanStack Query yet)
+- ContactSearch component uses raw API calls (not the `useContacts` hook)
+- No 404 catch-all route
+- No dark mode, no semantic CSS variables (Phase 8)
 - Single admin password, no RBAC
 - HubSpot calls are synchronous (can block 5-10s)
 - No pagination on list endpoints

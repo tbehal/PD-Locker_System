@@ -17,14 +17,14 @@ This document is the single source of truth for bringing NDECCSchedApp to produc
 | [Phase 4](#phase-4-database--observability)              | Database & Observability      | High     | 3-4 days    | ✅ COMPLETE |
 | [Phase 5](#phase-5-typescript-migration)                 | TypeScript Migration          | High     | 5-7 days    | ✅ COMPLETE |
 | [Phase 6](#phase-6-api-documentation--backend-hardening) | API Docs & Backend Hardening  | High     | 3-4 days    | ✅ COMPLETE |
-| [Phase 7](#phase-7-frontend-modernization)               | Frontend Modernization        | High     | 5-7 days    | Pending     |
+| [Phase 7](#phase-7-frontend-modernization)               | Frontend Modernization        | High     | 5-7 days    | ✅ COMPLETE |
 | [Phase 8](#phase-8-design-system--accessibility)         | Design System & Accessibility | Medium   | 3-4 days    | Pending     |
 | [Phase 9](#phase-9-comprehensive-testing)                | Comprehensive Testing         | High     | 4-5 days    | Pending     |
 | [Phase 10](#phase-10-performance--scalability)           | Performance & Scalability     | Medium   | 2-3 days    | Pending     |
 
 **Total estimated effort:** ~32-43 developer-days (~6-8 weeks)
-**Completed:** Phase 1 + 2 + 3 + 4 + 5 (~15-20 days)
-**Remaining:** ~17-23 developer-days (~3-4 weeks)
+**Completed:** Phase 1 + 2 + 3 + 4 + 5 + 6 + 7 (~25-34 days)
+**Remaining:** ~9-12 developer-days (~2 weeks)
 
 ---
 
@@ -954,15 +954,38 @@ Apply to ALL API functions — remove every try/catch that returns a fallback va
 
 | #   | Task                                    | Complexity | Status |
 | --- | --------------------------------------- | ---------- | ------ |
-| 7.1 | React Router                            | Medium     | [ ]    |
-| 7.2 | Zustand state management                | Medium     | [ ]    |
-| 7.3 | TanStack Query for server state         | Medium     | [ ]    |
-| 7.4 | React Hook Form + Zod                   | Medium     | [ ]    |
-| 7.5 | Decompose App.jsx                       | Large      | [ ]    |
-| 7.6 | Error boundaries                        | Small      | [ ]    |
-| 7.7 | Fix API client (stop swallowing errors) | Small      | [ ]    |
+| 7.1 | React Router                            | Medium     | [x]    |
+| 7.2 | Zustand state management                | Medium     | [x]    |
+| 7.3 | TanStack Query for server state         | Medium     | [x]    |
+| 7.4 | React Hook Form + Zod                   | Medium     | [x]    |
+| 7.5 | Decompose App.jsx                       | Large      | [x]    |
+| 7.6 | Error boundaries                        | Small      | [x]    |
+| 7.7 | Fix API client (stop swallowing errors) | Small      | [x]    |
 
 **Phase 7 Validation:** URLs change on navigation. Back/forward buttons work. Data fetching shows loading/error states via TanStack Query. Forms validate with Zod. No component >200 lines. No props drilling beyond 1 level.
+
+### Completion Notes (2026-03-03)
+
+**Decisions:**
+
+- Frontend stays JavaScript (`.jsx`/`.js`) — no TypeScript migration for frontend
+- Only App.jsx decomposed — AnalyticsDashboard and RegistrationList internals untouched (adapted to use hooks/stores instead of props)
+
+**What was built:**
+
+- React Router v6 with `createBrowserRouter`: `/login`, `/schedule`, `/registration`, `/analytics`
+- Zustand stores: `authStore` (auth state), `scheduleStore` (activeCycleId, filters, searchCriteria, selectedCombination + `reset()`)
+- TanStack Query hooks: `useCycles` (7 exports), `useGrid`, `useBookings` (4 exports), `useContacts` (2 exports)
+- Zod schemas: `login`, `search`, `booking`, `cycle`
+- App.jsx: 545 → 17 lines (just providers). New `AppLayout` (auth guard + chrome) and `ScheduleView` (grid/booking logic)
+- ErrorBoundary with `resetKey` pattern for forced re-mount on retry
+- API client: 7 functions no longer swallow errors — TanStack Query handles error states
+
+**Deferred to Phase 8:**
+
+- Migrate RegistrationList and AnalyticsDashboard from manual `useEffect`+`fetch` to TanStack Query hooks
+- ContactSearch component still uses raw API calls (not the `useContacts` hook)
+- Grid loading/error state UI, cycle mutation error toasts, 404 route
 
 ---
 
