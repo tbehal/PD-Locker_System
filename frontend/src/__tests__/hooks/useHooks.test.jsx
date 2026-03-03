@@ -1,6 +1,6 @@
 import React from 'react';
-import { vi, describe, test, expect, beforeEach } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { vi, describe, test, expect, beforeEach, afterEach } from 'vitest';
+import { renderHook, waitFor, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useScheduleStore } from '../../stores/scheduleStore';
 
@@ -39,6 +39,7 @@ import { useBookSlot, useFindCombinations, useUnbookSlot } from '../../hooks/use
 import { useContactSearch, useContact } from '../../hooks/useContacts';
 import { useRegistrationList, useRefreshRegistration } from '../../hooks/useRegistration';
 import { useSeatingAnalytics, useRegistrationAnalytics } from '../../hooks/useAnalytics';
+import { useDebounce } from '../../hooks/useDebounce';
 
 function createWrapper() {
   const queryClient = new QueryClient({
@@ -407,5 +408,89 @@ describe('useRegistrationAnalytics', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(api.fetchRegistrationAnalytics).toHaveBeenCalledWith(2026, 'PM', 7);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// useDebounce
+// ---------------------------------------------------------------------------
+
+describe('useDebounce', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  test('returns initial value immediately', () => {
+    const { result } = renderHook(() => useDebounce('hello', 300));
+    expect(result.current).toBe('hello');
+  });
+
+  test('does not update value before delay elapses', () => {
+    const { result, rerender } = renderHook(({ value, delay }) => useDebounce(value, delay), {
+      initialProps: { value: 'initial', delay: 300 },
+    });
+
+    rerender({ value: 'updated', delay: 300 });
+    act(() => vi.advanceTimersByTime(200));
+
+    expect(result.current).toBe('initial');
+  });
+
+  test('updates value after delay elapses', () => {
+    const { result, rerender } = renderHook(({ value, delay }) => useDebounce(value, delay), {
+      initialProps: { value: 'initial', delay: 300 },
+    });
+
+    rerender({ value: 'updated', delay: 300 });
+    act(() => vi.advanceTimersByTime(300));
+
+    expect(result.current).toBe('updated');
+  });
+
+  test('resets timer when value changes before delay', () => {
+    const { result, rerender } = renderHook(({ value, delay }) => useDebounce(value, delay), {
+      initialProps: { value: 'a', delay: 300 },
+    });
+
+    rerender({ value: 'ab', delay: 300 });
+    act(() => vi.advanceTimersByTime(200));
+    rerender({ value: 'abc', delay: 300 });
+    act(() => vi.advanceTimersByTime(200));
+
+    // Only 200ms since last change — should still be 'a'
+    expect(result.current).toBe('a');
+
+    act(() => vi.advanceTimersByTime(100));
+    expect(result.current).toBe('abc');
+  });
+
+  test('uses default delay of 300ms when not specified', () => {
+    const { result, rerender } = renderHook(({ value }) => useDebounce(value), {
+      initialProps: { value: 'start' },
+    });
+
+    rerender({ value: 'end' });
+    act(() => vi.advanceTimersByTime(299));
+    expect(result.current).toBe('start');
+
+    act(() => vi.advanceTimersByTime(1));
+    expect(result.current).toBe('end');
+  });
+
+  test('respects custom delay parameter', () => {
+    const { result, rerender } = renderHook(({ value, delay }) => useDebounce(value, delay), {
+      initialProps: { value: 'start', delay: 500 },
+    });
+
+    rerender({ value: 'end', delay: 500 });
+    act(() => vi.advanceTimersByTime(400));
+    expect(result.current).toBe('start');
+
+    act(() => vi.advanceTimersByTime(100));
+    expect(result.current).toBe('end');
   });
 });

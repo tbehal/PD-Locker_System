@@ -6,6 +6,7 @@ import { useCycles, useUpdateCourseCodes } from '../hooks/useCycles';
 import { useRegistrationList, useRefreshRegistration } from '../hooks/useRegistration';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { SkeletonTable } from './ui/SkeletonTable';
+import { useDebounce } from '../hooks/useDebounce';
 
 export default function RegistrationList() {
   const cycleId = useScheduleStore((s) => s.activeCycleId);
@@ -17,6 +18,7 @@ export default function RegistrationList() {
   const editCodesRef = useRef(null);
   const [shift, setShift] = useState('AM');
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearch = useDebounce(searchQuery, 300);
   const [exporting, setExporting] = useState(false);
 
   // Column filters
@@ -76,9 +78,10 @@ export default function RegistrationList() {
   // Filter rows by search query + column filters
   const filteredRows = useMemo(() => {
     if (!data?.rows) return [];
+    const activeSearch = searchQuery === '' ? '' : debouncedSearch;
     return data.rows.filter((row) => {
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
+      if (activeSearch.trim()) {
+        const q = activeSearch.trim().toLowerCase();
         const matchesSearch =
           row.firstName.toLowerCase().includes(q) ||
           row.lastName.toLowerCase().includes(q) ||
@@ -101,9 +104,18 @@ export default function RegistrationList() {
       }
       return true;
     });
-  }, [data?.rows, searchQuery, filterPayment, filterRoadmap, filterAFK, filterACJ]);
+  }, [
+    data?.rows,
+    searchQuery,
+    debouncedSearch,
+    filterPayment,
+    filterRoadmap,
+    filterAFK,
+    filterACJ,
+  ]);
 
   const hasActiveFilters =
+    searchQuery !== '' ||
     filterPayment !== 'ALL' ||
     filterRoadmap !== 'ALL' ||
     filterAFK !== 'ALL' ||

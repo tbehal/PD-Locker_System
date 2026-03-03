@@ -1,31 +1,26 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useContactSearch } from '../hooks/useContacts';
+import { useDebounce } from '../hooks/useDebounce';
 
 const ContactSearch = ({
   onContactSelect,
   selectedContact,
-  placeholder = 'Search for student...',
+  placeholder = 'Search by name, email, or student ID...',
 }) => {
   const [query, setQuery] = useState('');
-  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const inputRef = useRef(null);
   const suggestionsRef = useRef(null);
 
-  // Debounce: shorter for longer queries (likely pasted)
+  const trimmedQuery = query.trim();
+  const debounceDelay = trimmedQuery.length > 10 ? 100 : 300;
+  const debouncedQuery = useDebounce(trimmedQuery, debounceDelay);
+
   useEffect(() => {
-    const trimmedQuery = query.trim();
-    const debounceTime = trimmedQuery.length > 10 ? 100 : 300;
-
-    const timeoutId = setTimeout(() => {
-      setDebouncedQuery(trimmedQuery);
-      if (trimmedQuery.length < 2) {
-        setShowSuggestions(false);
-      }
-    }, debounceTime);
-
-    return () => clearTimeout(timeoutId);
-  }, [query]);
+    if (debouncedQuery.length < 2) {
+      setShowSuggestions(false);
+    }
+  }, [debouncedQuery]);
 
   const { data: contacts = [], isLoading } = useContactSearch(debouncedQuery);
 
@@ -63,14 +58,12 @@ const ContactSearch = ({
 
   const handleContactSelect = (contact) => {
     setQuery('');
-    setDebouncedQuery('');
     setShowSuggestions(false);
     onContactSelect(contact);
   };
 
   const handleClear = () => {
     setQuery('');
-    setDebouncedQuery('');
     setShowSuggestions(false);
     onContactSelect(null);
     inputRef.current?.focus();
@@ -103,7 +96,7 @@ const ContactSearch = ({
           onFocus={() =>
             debouncedQuery.length >= 2 && contacts.length > 0 && setShowSuggestions(true)
           }
-          placeholder="Search by name, email, or student ID..."
+          placeholder={placeholder}
           className="w-full px-3 py-2 border border-input rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring"
         />
         {query && (
@@ -168,7 +161,7 @@ const ContactSearch = ({
       {showSuggestions && !isLoading && debouncedQuery.length >= 2 && contacts.length === 0 && (
         <div className="absolute z-10 w-full mt-1 bg-card border border-input rounded-md shadow-lg">
           <div className="px-4 py-3 text-muted-foreground text-center">
-            No contacts found for "{query}"
+            No contacts found for "{debouncedQuery}"
           </div>
         </div>
       )}

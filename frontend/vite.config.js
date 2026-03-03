@@ -11,7 +11,18 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    assetsDir: 'assets'
+    assetsDir: 'assets',
+    chunkSizeWarningLimit: 300,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-query': ['@tanstack/react-query', 'axios'],
+          'vendor-forms': ['react-hook-form', '@hookform/resolvers', 'zod'],
+          'vendor-ui': ['sonner', 'zustand'],
+        },
+      },
+    },
   },
   test: {
     environment: 'jsdom',

@@ -11,6 +11,15 @@ export default class ErrorBoundary extends React.Component {
   }
 
   handleReset = () => {
+    const message = this.state.error?.message || '';
+    if (
+      message.includes('dynamically imported module') ||
+      message.includes('Loading chunk') ||
+      message.includes('Failed to fetch')
+    ) {
+      window.location.reload();
+      return;
+    }
     this.setState((prev) => ({ hasError: false, error: null, resetKey: prev.resetKey + 1 }));
   };
 
