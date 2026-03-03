@@ -18,13 +18,13 @@ This document is the single source of truth for bringing NDECCSchedApp to produc
 | [Phase 5](#phase-5-typescript-migration)                 | TypeScript Migration          | High     | 5-7 days    | ✅ COMPLETE |
 | [Phase 6](#phase-6-api-documentation--backend-hardening) | API Docs & Backend Hardening  | High     | 3-4 days    | ✅ COMPLETE |
 | [Phase 7](#phase-7-frontend-modernization)               | Frontend Modernization        | High     | 5-7 days    | ✅ COMPLETE |
-| [Phase 8](#phase-8-design-system--accessibility)         | Design System & Accessibility | Medium   | 3-4 days    | Pending     |
+| [Phase 8](#phase-8-design-system--accessibility)         | Design System & Accessibility | Medium   | 3-4 days    | ✅ COMPLETE |
 | [Phase 9](#phase-9-comprehensive-testing)                | Comprehensive Testing         | High     | 4-5 days    | Pending     |
 | [Phase 10](#phase-10-performance--scalability)           | Performance & Scalability     | Medium   | 2-3 days    | Pending     |
 
 **Total estimated effort:** ~32-43 developer-days (~6-8 weeks)
-**Completed:** Phase 1 + 2 + 3 + 4 + 5 + 6 + 7 (~25-34 days)
-**Remaining:** ~9-12 developer-days (~2 weeks)
+**Completed:** Phase 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 (~28-38 days)
+**Remaining:** ~6-8 developer-days (~1-2 weeks)
 
 ---
 
@@ -981,19 +981,39 @@ Apply to ALL API functions — remove every try/catch that returns a fallback va
 - ErrorBoundary with `resetKey` pattern for forced re-mount on retry
 - API client: 7 functions no longer swallow errors — TanStack Query handles error states
 
-**Deferred to Phase 8:**
+**Deferred to Phase 8 (now complete):**
 
-- Migrate RegistrationList and AnalyticsDashboard from manual `useEffect`+`fetch` to TanStack Query hooks
-- ContactSearch component still uses raw API calls (not the `useContacts` hook)
-- Grid loading/error state UI, cycle mutation error toasts, 404 route
+- ~~Migrate RegistrationList and AnalyticsDashboard from manual `useEffect`+`fetch` to TanStack Query hooks~~ ✅
+- ~~ContactSearch component still uses raw API calls (not the `useContacts` hook)~~ ✅
+- ~~Grid loading/error state UI, cycle mutation error toasts~~ ✅
+- 404 route — still pending (Phase 9 or standalone)
 
 ---
 
-# Phase 8: Design System & Accessibility
+# Phase 8: Design System & Accessibility ✅ COMPLETE
 
-**Why now:** With the frontend properly structured (router, state, typed), the design system can be applied consistently.
+**Summary:** Implemented a full semantic design system with 49 CSS variables (`:root` + `.dark`), replaced 318+ hardcoded Tailwind color classes across 15 components with semantic tokens, added dark mode with class-based toggle + FOUC prevention, Sonner toast notifications on all mutations, shimmer loading skeletons, focus traps + ARIA landmarks + semantic HTML for accessibility, and migrated RegistrationList/AnalyticsDashboard/ContactSearch to TanStack Query hooks.
 
-**Current state:** Hardcoded Tailwind colors everywhere, no CSS variables, no dark mode, no loading skeletons (except analytics), `confirm()` dialogs, no ARIA labels, Sonner installed but unused.
+**Tasks completed:** 8/8 (8.6 and 8.8 were pre-resolved — 0 `confirm()` calls and 0 inline styles found during audit)
+
+**New files created:**
+
+- `frontend/src/lib/chartTheme.js` — Reads CSS variables → hex for Recharts
+- `frontend/src/components/ui/Skeleton.jsx` + `SkeletonTable.jsx` — Shared skeleton components
+- `frontend/src/components/DarkModeToggle.jsx` — Sun/Moon toggle (Zustand-backed)
+- `frontend/src/hooks/useFocusTrap.js` — Focus trap + Escape callback for dialogs
+- `frontend/src/hooks/useRegistration.js` — TanStack Query hooks for registration
+- `frontend/src/hooks/useAnalytics.js` — TanStack Query hooks for analytics
+- `frontend/src/stores/themeStore.js` — Centralized theme state (Zustand)
+
+**Key decisions:**
+
+- CSS variables use `rgb(var(--token) / <alpha-value>)` pattern for Tailwind alpha support
+- Zustand `themeStore` centralizes theme state (DarkModeToggle, Sonner theme prop, chart reactivity)
+- PDF export temporarily removes `.dark` class during capture to ensure white background
+- `useFocusTrap` hook with `onEscape` callback applied to all 5+ dialogs
+- Registration hooks use `staleTime: 60_000` (HubSpot-backed data)
+- `useUpdateCourseCodes` invalidates `['registration']` query for automatic refresh
 
 ---
 
@@ -1243,14 +1263,14 @@ Replace all `window.confirm()` calls (grid reset, cycle delete) with state-drive
 
 | #   | Task                         | Complexity | Status |
 | --- | ---------------------------- | ---------- | ------ |
-| 8.1 | Semantic CSS variables       | Small      | [ ]    |
-| 8.2 | Replace all hardcoded colors | Large      | [ ]    |
-| 8.3 | Enable dark mode             | Small      | [ ]    |
-| 8.4 | Activate Sonner toasts       | Small      | [ ]    |
-| 8.5 | Loading skeletons            | Medium     | [ ]    |
-| 8.6 | Custom confirm dialog        | Small      | [ ]    |
-| 8.7 | Accessibility fixes          | Medium     | [ ]    |
-| 8.8 | Replace inline styles        | Small      | [ ]    |
+| 8.1 | Semantic CSS variables       | Small      | [x]    |
+| 8.2 | Replace all hardcoded colors | Large      | [x]    |
+| 8.3 | Enable dark mode             | Small      | [x]    |
+| 8.4 | Activate Sonner toasts       | Small      | [x]    |
+| 8.5 | Loading skeletons            | Medium     | [x]    |
+| 8.6 | Custom confirm dialog        | Small      | [x]    |
+| 8.7 | Accessibility fixes          | Medium     | [x]    |
+| 8.8 | Replace inline styles        | Small      | [x]    |
 
 **Phase 8 Validation:** Toggle dark mode — all components render correctly. No hardcoded color classes in codebase (`grep -r "bg-red\|bg-green\|bg-gray\|text-gray" src/`). Skeleton loaders visible during data fetch. Toast notifications on all user actions. Tab through entire app with keyboard only.
 

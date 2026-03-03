@@ -60,21 +60,31 @@ NDECCSchedApp/
 │       ├── config.js             # API base URL
 │       ├── stores/               # Zustand stores
 │       │   ├── authStore.js      # Auth state (authenticated, setAuthenticated)
-│       │   └── scheduleStore.js  # UI state (activeCycleId, filters, searchCriteria)
+│       │   ├── scheduleStore.js  # UI state (activeCycleId, filters, searchCriteria)
+│       │   └── themeStore.js     # Theme state (theme, toggleTheme) — drives dark mode + Sonner + charts
 │       ├── hooks/                # TanStack Query hooks
 │       │   ├── useCycles.js      # Cycle CRUD + lock/unlock mutations
 │       │   ├── useGrid.js        # Grid data query (auto-refetch on filter change)
 │       │   ├── useBookings.js    # Book/unbook/reset/findCombinations mutations
-│       │   └── useContacts.js    # Contact search/lookup queries
+│       │   ├── useContacts.js    # Contact search/lookup queries
+│       │   ├── useRegistration.js # Registration list query + refresh mutation
+│       │   ├── useAnalytics.js   # Seating + registration analytics queries
+│       │   └── useFocusTrap.js   # Focus trap + Escape callback for dialogs
+│       ├── lib/
+│       │   └── chartTheme.js     # Reads CSS variables → hex for Recharts
 │       ├── schemas/              # Zod validation schemas
 │       │   ├── login.js          # Login form (password)
 │       │   ├── search.js         # Search criteria (startWeek, endWeek, weeksNeeded)
 │       │   ├── booking.js        # Booking form (traineeName, contactId)
 │       │   └── cycle.js          # Create cycle form (year, courseCodes)
 │       └── components/
-│           ├── AppLayout.jsx     # Auth guard + header + nav + CycleTabs + Outlet
+│           ├── AppLayout.jsx     # Auth guard + header + nav + CycleTabs + DarkModeToggle + Outlet
 │           ├── ScheduleView.jsx  # Grid/search/booking orchestrator
 │           ├── ErrorBoundary.jsx # Catch render errors with retry UI
+│           ├── DarkModeToggle.jsx # Sun/Moon theme toggle (uses themeStore)
+│           ├── ui/               # Shared UI primitives
+│           │   ├── Skeleton.jsx  # Shimmer skeleton + SkeletonText
+│           │   └── SkeletonTable.jsx # Table loading skeleton
 │           └── ...               # Feature-specific components
 └── prisma/
     ├── schema.prisma             # DB schema (5 models)
@@ -252,16 +262,17 @@ Always check lock state in the service layer before mutating.
 - **Zustand stores** for client state:
   - `authStore` — `authenticated` (null = loading, true/false = known)
   - `scheduleStore` — `activeCycleId`, `filters`, `searchCriteria`, `selectedCombination`, `reset()`
+  - `themeStore` — `theme` ('light'|'dark'), `toggleTheme()`, `setTheme()` — drives DarkModeToggle, Sonner theme prop, chart reactivity
 - **TanStack Query** for server state:
-  - Query keys: `['cycles']`, `['grid', cycleId, shift, labType, side]`, `['contacts', ...]`
-  - Mutations invalidate related query keys on success (e.g., `bookSlot` invalidates `['grid']`)
-  - `staleTime: 30s`, `retry: 1` (configured in App.jsx `QueryClient`)
+  - Query keys: `['cycles']`, `['grid', cycleId, shift, labType, side]`, `['contacts', ...]`, `['registration', cycleId, shift]`, `['seatingAnalytics', year, cycleId]`, `['registrationAnalytics', year, shift, cycleId]`
+  - Mutations invalidate related query keys on success (e.g., `bookSlot` invalidates `['grid']`, `updateCourseCodes` invalidates `['registration']`)
+  - `staleTime: 30s` default, `retry: 1` (configured in App.jsx `QueryClient`). Registration hooks use `staleTime: 60s` (HubSpot-backed)
 - **Local state** for ephemeral UI (dialog state, search results, form inputs)
 
 ### Component Patterns
 
 - Functional components with hooks only
-- `App.jsx` is providers only (~17 lines): `QueryClientProvider` + `RouterProvider` + `Toaster`
+- `App.jsx` is providers only (~17 lines): `QueryClientProvider` + `RouterProvider` + `Toaster` (theme from `themeStore`)
 - `AppLayout.jsx` handles auth + chrome. `ScheduleView.jsx` handles grid/booking orchestration
 - Dialogs render `null` when their trigger state is falsy
 - Debounce search inputs (300ms for short queries, 100ms for pasted text)
@@ -275,7 +286,13 @@ Always check lock state in the service layer before mutating.
 ### Styling
 
 - Tailwind CSS utility classes only — no CSS modules, no inline styles
-- Custom brand palette defined in `tailwind.config.js` (`brand-50` through `brand-900`, primary: `#0660B2`)
+- **Semantic design system:** 49 CSS variables in `style.css` (`:root` light + `.dark` dark mode)
+- All components use semantic tokens: `bg-card`, `text-foreground`, `bg-primary`, `text-muted-foreground`, `border-border`, etc.
+- **Zero hardcoded colors** in `src/components/` — all colors via CSS variable tokens
+- Grid-specific tokens: `bg-grid-available`, `bg-grid-booked`, `bg-grid-selected`, etc.
+- Chart colors: `chartTheme.js` reads `--chart-*` CSS variables → hex for Recharts
+- Dark mode: `darkMode: 'class'` in Tailwind, Zustand `themeStore` for state, FOUC prevention in `index.html`
+- Legacy `brand-*` palette still in config but not used in components
 - Fonts: `Montserrat` (headings/sans), `Karla` (body)
 
 ---
@@ -424,18 +441,18 @@ cd frontend && npm test
 ### Tailwind CSS Styling
 
 - **Use Tailwind utilities only.** No `style={{ }}` inline styles, no CSS modules. If Tailwind doesn't have a utility, extend the config — don't write custom CSS.
-- **Use the `brand-*` palette for primary colors.** `brand-500` is the primary blue. Don't hardcode hex values — use the Tailwind class.
+- **Use semantic tokens, not raw colors.** `bg-primary`, `text-foreground`, `border-border` — never `bg-blue-500` or `text-gray-700`. All colors are defined as CSS variables in `style.css` and mapped in `tailwind.config.js`.
 - **Responsive: mobile-first.** Write base styles for mobile, add `sm:`, `md:`, `lg:` for larger screens.
 - **Group related utilities logically.** Layout → spacing → typography → colors → borders → effects.
 
   ```jsx
-  // Good — logical grouping
+  // Good — semantic tokens
   className =
-    'flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-brand-500 rounded-md hover:bg-brand-600';
+    'flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90';
 
-  // Bad — random order
+  // Bad — hardcoded colors
   className =
-    'hover:bg-brand-600 text-sm px-4 flex bg-brand-500 font-medium rounded-md py-2 gap-2 items-center text-white';
+    'flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-500 rounded-md hover:bg-blue-600';
   ```
 
 - **Use consistent sizing.** Stick to Tailwind's spacing scale (`p-2`, `p-4`, `p-6`). Avoid arbitrary values like `p-[13px]` unless absolutely necessary.
@@ -517,13 +534,10 @@ cd frontend && npm test
 ## Known Limitations (See REMEDIATION.md)
 
 - Frontend stays JavaScript (no TypeScript migration planned)
-- RegistrationList and AnalyticsDashboard still use manual `useEffect`+`fetch` (not TanStack Query yet)
-- ContactSearch component uses raw API calls (not the `useContacts` hook)
 - No 404 catch-all route
-- No dark mode, no semantic CSS variables (Phase 8)
 - Single admin password, no RBAC
 - HubSpot calls are synchronous (can block 5-10s)
 - No pagination on list endpoints
 - SQLite in dev vs PostgreSQL in prod (behavioral differences possible)
 
-See `REMEDIATION.md` for the complete 10-phase plan to address all gaps.
+See `REMEDIATION.md` for the complete 10-phase plan to address all gaps (Phases 1-8 complete, 9-10 remaining).
