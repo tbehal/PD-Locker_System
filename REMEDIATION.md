@@ -15,7 +15,7 @@ This document is the single source of truth for bringing NDECCSchedApp to produc
 | [Phase 2](#phase-2-backend-architecture-fixes)           | Backend Architecture          | Critical | 3-4 days    | ✅ COMPLETE |
 | [Phase 3](#phase-3-developer-tooling--cicd)              | Developer Tooling & CI/CD     | Critical | 2-3 days    | ✅ COMPLETE |
 | [Phase 4](#phase-4-database--observability)              | Database & Observability      | High     | 3-4 days    | ✅ COMPLETE |
-| [Phase 5](#phase-5-typescript-migration)                 | TypeScript Migration          | High     | 5-7 days    | Pending     |
+| [Phase 5](#phase-5-typescript-migration)                 | TypeScript Migration          | High     | 5-7 days    | ✅ COMPLETE |
 | [Phase 6](#phase-6-api-documentation--backend-hardening) | API Docs & Backend Hardening  | High     | 3-4 days    | Pending     |
 | [Phase 7](#phase-7-frontend-modernization)               | Frontend Modernization        | High     | 5-7 days    | Pending     |
 | [Phase 8](#phase-8-design-system--accessibility)         | Design System & Accessibility | Medium   | 3-4 days    | Pending     |
@@ -23,8 +23,8 @@ This document is the single source of truth for bringing NDECCSchedApp to produc
 | [Phase 10](#phase-10-performance--scalability)           | Performance & Scalability     | Medium   | 2-3 days    | Pending     |
 
 **Total estimated effort:** ~32-43 developer-days (~6-8 weeks)
-**Completed:** Phase 1 + 2 + 3 + 4 (~10-13 days)
-**Remaining:** ~22-30 developer-days (~4-5 weeks)
+**Completed:** Phase 1 + 2 + 3 + 4 + 5 (~15-20 days)
+**Remaining:** ~17-23 developer-days (~3-4 weeks)
 
 ---
 
@@ -129,11 +129,28 @@ This document is the single source of truth for bringing NDECCSchedApp to produc
 
 ---
 
-# Phase 5: TypeScript Migration
+# Phase 5: TypeScript Migration ✅ COMPLETE
+
+**Summary:** Migrated entire backend from JavaScript to TypeScript (29 `.js` files → `.ts`). Strict mode enabled (`strict: true` + `noUncheckedIndexedAccess: true`). Zero `any` types. `tsx watch` replaced `nodemon` for dev. `tsc` builds to `dist/` for production. Tests remain `.js` (deferred to Phase 9). Frontend migration deferred to Phase 7.
+
+**Completed:** 2026-03-03
+
+**Key changes:**
+
+- Installed TypeScript 5.7, tsx 4, ts-jest 29, typescript-eslint 8, all `@types/*` packages. Removed nodemon.
+- Created `tsconfig.json` (ES2022, CJS, strict, noUncheckedIndexedAccess)
+- Created `src/types/express.d.ts` (req.user augmentation), `src/types/index.ts` (shared domain types), `src/types/hubspot.ts` (HubSpot API interfaces)
+- Migrated all 29 source files + `prisma/seed.js` → `seed.ts`
+- Updated eslint.config.mjs (typescript-eslint v8), jest.config.js (ts-jest transform), CI workflow (typecheck + build steps), Dockerfile.prod (tsc build)
+- Safe `Number()` conversions instead of unsafe `as unknown as number` casts
+- Proper `instanceof Prisma.PrismaClientKnownRequestError` instead of manual PrismaError interface
+- Canonical type definitions in `types/hubspot.ts` — no duplicate type declarations across files
+
+**Scope note:** Backend only. Tasks 5.3–5.5 (frontend TypeScript) deferred to Phase 7 (Frontend Modernization) where they fit better alongside React Router, RHF+Zod, and component refactoring.
 
 **Why now:** TypeScript is the single most impactful change for code quality. In 2026, plain JavaScript for a professional project is considered a legacy approach. Prisma already generates TypeScript types — you just need to use them.
 
-**Current state:** Pure JavaScript everywhere. No type checking. No IDE autocompletion on API contracts.
+**Current state:** ~~Pure JavaScript everywhere.~~ Backend fully typed. Frontend still JavaScript (Phase 7).
 
 **Strategy:** Backend first (smaller surface, Prisma types ready), then frontend. Incremental migration — rename files one at a time, fix errors, move on.
 
@@ -442,15 +459,23 @@ export interface ApiError {
 
 ## Phase 5 Checklist
 
-| #   | Task                             | Complexity | Status |
-| --- | -------------------------------- | ---------- | ------ |
-| 5.1 | Backend TypeScript setup         | Medium     | [ ]    |
-| 5.2 | Migrate backend to TypeScript    | Large      | [ ]    |
-| 5.3 | Frontend TypeScript setup        | Medium     | [ ]    |
-| 5.4 | Create frontend type definitions | Medium     | [ ]    |
-| 5.5 | Migrate frontend to TypeScript   | Large      | [ ]    |
+| #   | Task                             | Complexity | Status             |
+| --- | -------------------------------- | ---------- | ------------------ |
+| 5.1 | Backend TypeScript setup         | Medium     | [x] ✅             |
+| 5.2 | Migrate backend to TypeScript    | Large      | [x] ✅             |
+| 5.3 | Frontend TypeScript setup        | Medium     | Deferred → Phase 7 |
+| 5.4 | Create frontend type definitions | Medium     | Deferred → Phase 7 |
+| 5.5 | Migrate frontend to TypeScript   | Large      | Deferred → Phase 7 |
 
-**Phase 5 Validation:** `npm run typecheck` passes in both directories. `npm run build` succeeds. Zero `any` types anywhere.
+**Phase 5 Validation (Backend):**
+
+- [x] `npm run typecheck` — 0 errors
+- [x] `npm run lint` — 0 errors, 0 warnings
+- [x] `npm run format:check` — all files formatted
+- [x] `npm test` — 18/18 tests pass
+- [x] `npm run build` — `dist/` populated successfully
+- [x] Zero `any` types in `src/**/*.ts`
+- [x] Zero `console.*` calls in `src/**/*.ts`
 
 ---
 
