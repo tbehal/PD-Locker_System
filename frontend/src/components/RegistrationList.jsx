@@ -131,8 +131,8 @@ export default function RegistrationList() {
       let aVal = a[sortColumn];
       let bVal = b[sortColumn];
 
-      if (aVal == null) aVal = '';
-      if (bVal == null) bVal = '';
+      aVal = aVal ?? '';
+      bVal = bVal ?? '';
 
       if (typeof aVal === 'boolean') {
         aVal = aVal ? 1 : 0;
