@@ -11,6 +11,7 @@ import {
   PieChart,
   Pie,
   Cell,
+  LabelList,
 } from 'recharts';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
@@ -178,7 +179,7 @@ function WeekOccupancyChart({ data }) {
 
   return (
     <ResponsiveContainer width="100%" height={300}>
-      <BarChart data={formatted} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
+      <BarChart data={formatted} margin={{ top: 16, right: 16, left: 0, bottom: 4 }}>
         <CartesianGrid strokeDasharray="3 3" stroke={axisStyle.gridStroke} />
         <XAxis dataKey="label" tick={{ fontSize: 11, fill: axisStyle.tick.fill }} />
         <YAxis
@@ -204,12 +205,14 @@ function WeekOccupancyChart({ data }) {
             );
           }}
         />
-        <Bar
-          dataKey="percent"
-          name="Occupancy %"
-          fill={chartColors.primary}
-          radius={[3, 3, 0, 0]}
-        />
+        <Bar dataKey="percent" name="Occupancy %" fill={chartColors.primary} radius={[3, 3, 0, 0]}>
+          <LabelList
+            dataKey="percent"
+            position="top"
+            formatter={(v) => `${v.toFixed(1)}%`}
+            style={{ fontSize: 10, fill: axisStyle.tick.fill }}
+          />
+        </Bar>
       </BarChart>
     </ResponsiveContainer>
   );
@@ -223,7 +226,7 @@ function LabOccupancyChart({ data }) {
 
   return (
     <ResponsiveContainer width="100%" height={300}>
-      <BarChart data={data || []} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
+      <BarChart data={data || []} margin={{ top: 16, right: 16, left: 0, bottom: 4 }}>
         <CartesianGrid strokeDasharray="3 3" stroke={axisStyle.gridStroke} />
         <XAxis dataKey="lab" tick={{ fontSize: 11, fill: axisStyle.tick.fill }} />
         <YAxis
@@ -254,7 +257,14 @@ function LabOccupancyChart({ data }) {
           name="Occupancy %"
           fill={chartColors.secondary}
           radius={[3, 3, 0, 0]}
-        />
+        >
+          <LabelList
+            dataKey="percent"
+            position="top"
+            formatter={(v) => `${v.toFixed(1)}%`}
+            style={{ fontSize: 10, fill: axisStyle.tick.fill }}
+          />
+        </Bar>
       </BarChart>
     </ResponsiveContainer>
   );
@@ -269,7 +279,7 @@ function ShiftComparisonChart({ data }) {
 
   return (
     <ResponsiveContainer width="100%" height={220}>
-      <BarChart data={data || []} margin={{ top: 4, right: 24, left: 0, bottom: 4 }}>
+      <BarChart data={data || []} margin={{ top: 16, right: 24, left: 0, bottom: 4 }}>
         <CartesianGrid strokeDasharray="3 3" stroke={axisStyle.gridStroke} />
         <XAxis dataKey="shift" tick={{ fontSize: 12, fill: axisStyle.tick.fill }} />
         <YAxis
@@ -299,6 +309,12 @@ function ShiftComparisonChart({ data }) {
           {(data || []).map((entry, i) => (
             <Cell key={i} fill={colorMap[entry.shift] || chartColors.primary} />
           ))}
+          <LabelList
+            dataKey="percent"
+            position="top"
+            formatter={(v) => `${v.toFixed(1)}%`}
+            style={{ fontSize: 11, fill: axisStyle.tick.fill }}
+          />
         </Bar>
       </BarChart>
     </ResponsiveContainer>
@@ -312,44 +328,54 @@ function PaymentPieChart({ data }) {
   const pieColors = [
     chartColors.primary,
     chartColors.success,
+    chartColors.rose,
+    chartColors.teal,
     chartColors.warning,
-    chartColors.danger,
     chartColors.purple,
+    chartColors.sky,
+    chartColors.danger,
     chartColors.muted,
+    chartColors.tertiary,
+    chartColors.orange,
   ];
   const axisStyle = getAxisStyle();
 
-  const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, name, count }) => {
+  const total = (data || []).reduce((sum, d) => sum + d.count, 0);
+
+  const renderInnerLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, count }) => {
     const RADIAN = Math.PI / 180;
-    const radius = innerRadius + (outerRadius - innerRadius) * 1.35;
+    const pct = total > 0 ? ((count / total) * 100).toFixed(0) : 0;
+    if (pct < 5) return null;
+    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
     const x = cx + radius * Math.cos(-midAngle * RADIAN);
     const y = cy + radius * Math.sin(-midAngle * RADIAN);
     return (
       <text
         x={x}
         y={y}
-        fill={axisStyle.tick.fill}
-        textAnchor={x > cx ? 'start' : 'end'}
+        fill="#fff"
+        textAnchor="middle"
         dominantBaseline="central"
-        fontSize={11}
+        fontSize={12}
+        fontWeight={600}
       >
-        {`${name} (${count})`}
+        {`${pct}%`}
       </text>
     );
   };
 
   return (
-    <ResponsiveContainer width="100%" height={300}>
+    <ResponsiveContainer width="100%" height={320}>
       <PieChart>
         <Pie
           data={data || []}
           dataKey="count"
           nameKey="status"
           cx="50%"
-          cy="50%"
-          outerRadius={90}
+          cy="45%"
+          outerRadius={100}
           labelLine={false}
-          label={renderCustomLabel}
+          label={renderInnerLabel}
         >
           {(data || []).map((_, i) => (
             <Cell key={i} fill={pieColors[i % pieColors.length]} />
@@ -359,18 +385,26 @@ function PaymentPieChart({ data }) {
           content={({ active, payload }) => {
             if (!active || !payload?.length) return null;
             const d = payload[0]?.payload;
+            const pct = total > 0 ? ((d?.count / total) * 100).toFixed(1) : 0;
             return (
               <div className="bg-card border border-border rounded-lg shadow-md p-3 text-sm">
                 <p className="font-semibold text-foreground">{d?.status}</p>
-                <p className="text-xs text-muted-foreground">Count: {d?.count}</p>
+                <p className="text-xs text-muted-foreground">
+                  Count: {d?.count} ({pct}%)
+                </p>
               </div>
             );
           }}
         />
         <Legend
-          formatter={(value) => (
-            <span style={{ fontSize: 11, color: axisStyle.tick.fill }}>{value}</span>
-          )}
+          formatter={(value, entry) => {
+            const item = (data || []).find((d) => d.status === value);
+            return (
+              <span style={{ fontSize: 11, color: axisStyle.tick.fill }}>
+                {value} ({item?.count || 0})
+              </span>
+            );
+          }}
         />
       </PieChart>
     </ResponsiveContainer>
@@ -394,7 +428,7 @@ function ProgramChart({ data }) {
       <BarChart
         data={data || []}
         layout="vertical"
-        margin={{ top: 4, right: 32, left: 16, bottom: 4 }}
+        margin={{ top: 4, right: 48, left: 16, bottom: 4 }}
       >
         <CartesianGrid strokeDasharray="3 3" stroke={axisStyle.gridStroke} horizontal={false} />
         <XAxis type="number" tick={{ fontSize: 11, fill: axisStyle.tick.fill }} />
@@ -420,6 +454,11 @@ function ProgramChart({ data }) {
           {(data || []).map((entry, i) => (
             <Cell key={i} fill={nameToColor[entry.name] || chartColors.tertiary} />
           ))}
+          <LabelList
+            dataKey="count"
+            position="right"
+            style={{ fontSize: 11, fill: axisStyle.tick.fill }}
+          />
         </Bar>
       </BarChart>
     </ResponsiveContainer>
@@ -439,7 +478,7 @@ function CycleCountChart({ data }) {
 
   return (
     <ResponsiveContainer width="100%" height={240}>
-      <BarChart data={formatted} margin={{ top: 4, right: 24, left: 0, bottom: 4 }}>
+      <BarChart data={formatted} margin={{ top: 16, right: 24, left: 0, bottom: 4 }}>
         <CartesianGrid strokeDasharray="3 3" stroke={axisStyle.gridStroke} />
         <XAxis dataKey="label" tick={{ fontSize: 11, fill: axisStyle.tick.fill }} />
         <YAxis
@@ -461,7 +500,13 @@ function CycleCountChart({ data }) {
             );
           }}
         />
-        <Bar dataKey="count" name="Students" fill={chartColors.tertiary} radius={[3, 3, 0, 0]} />
+        <Bar dataKey="count" name="Students" fill={chartColors.tertiary} radius={[3, 3, 0, 0]}>
+          <LabelList
+            dataKey="count"
+            position="top"
+            style={{ fontSize: 11, fill: axisStyle.tick.fill }}
+          />
+        </Bar>
       </BarChart>
     </ResponsiveContainer>
   );

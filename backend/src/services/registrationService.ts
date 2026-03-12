@@ -10,12 +10,25 @@ function ensureHubSpot(): void {
 }
 
 function filterShiftCodes(courseCodes: string[], shift: string): string[] {
-  const shiftCodes = courseCodes.filter((code) => {
+  const shiftSpecific: string[] = [];
+  const neutral: string[] = [];
+
+  for (const code of courseCodes) {
     const upper = code.toUpperCase();
-    if (shift === 'AM') return upper.includes('-AM') || upper.includes('_AM');
-    return upper.includes('-PM') || upper.includes('_PM');
-  });
-  return shiftCodes.length > 0 ? shiftCodes : courseCodes;
+    const isAM = upper.includes('-AM') || upper.includes('_AM');
+    const isPM = upper.includes('-PM') || upper.includes('_PM');
+
+    if (isAM || isPM) {
+      if (shift === 'AM' && isAM) shiftSpecific.push(code);
+      if (shift === 'PM' && isPM) shiftSpecific.push(code);
+    } else {
+      neutral.push(code);
+    }
+  }
+
+  // Neutral codes (no shift indicator, e.g. deposit codes) go to PM only
+  if (shift === 'PM') return [...shiftSpecific, ...neutral];
+  return shiftSpecific;
 }
 
 async function getRegistrationList(

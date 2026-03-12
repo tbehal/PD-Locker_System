@@ -1,5 +1,6 @@
 import prisma from '../db';
 import AppError from '../lib/AppError';
+import hubspot from '../hubspot';
 import type { CycleWithWeeks } from '../types';
 
 interface WeekInput {
@@ -94,6 +95,9 @@ async function updateCourseCodes(cycleId: number, courseCodes: string[]) {
       courseCodes: courseCodes.length > 0 ? JSON.stringify(courseCodes) : null,
     },
   });
+
+  hubspot.clearRegistrationCache(`${cycleId}_AM`);
+  hubspot.clearRegistrationCache(`${cycleId}_PM`);
 
   return {
     ...updated,

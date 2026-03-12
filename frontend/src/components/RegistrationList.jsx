@@ -20,6 +20,8 @@ export default function RegistrationList() {
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearch = useDebounce(searchQuery, 300);
   const [exporting, setExporting] = useState(false);
+  const [sortColumn, setSortColumn] = useState('registrationDate');
+  const [sortDirection, setSortDirection] = useState('asc');
 
   // Column filters
   const [filterPayment, setFilterPayment] = useState('ALL');
@@ -113,6 +115,40 @@ export default function RegistrationList() {
     filterAFK,
     filterACJ,
   ]);
+
+  const handleSort = (column) => {
+    if (sortColumn === column) {
+      setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
+  const sortedRows = useMemo(() => {
+    if (!sortColumn) return filteredRows;
+    return [...filteredRows].sort((a, b) => {
+      let aVal = a[sortColumn];
+      let bVal = b[sortColumn];
+
+      if (aVal == null) aVal = '';
+      if (bVal == null) bVal = '';
+
+      if (typeof aVal === 'boolean') {
+        aVal = aVal ? 1 : 0;
+        bVal = bVal ? 1 : 0;
+      } else if (typeof aVal === 'number') {
+        // numbers sort as-is
+      } else {
+        aVal = String(aVal).toLowerCase();
+        bVal = String(bVal).toLowerCase();
+      }
+
+      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [filteredRows, sortColumn, sortDirection]);
 
   const hasActiveFilters =
     searchQuery !== '' ||
@@ -370,7 +406,7 @@ export default function RegistrationList() {
           {/* Meta info */}
           <div className="px-4 py-3 bg-muted/50 border-b border-border flex items-center justify-between text-sm text-muted-foreground">
             <span>
-              Showing {filteredRows.length} of {data.rows.length} students
+              Showing {sortedRows.length} of {data.rows.length} students
               {(searchQuery || hasActiveFilters) && ` (filtered)`}
             </span>
             <span>
@@ -384,58 +420,67 @@ export default function RegistrationList() {
             <table className="w-full text-sm text-left">
               <thead>
                 <tr className="bg-muted/50 border-b border-border">
-                  <th className="px-3 py-2 font-medium text-secondary-foreground whitespace-nowrap">
-                    Seat #
-                  </th>
-                  <th className="px-3 py-2 font-medium text-secondary-foreground whitespace-nowrap">
-                    First Name
-                  </th>
-                  <th className="px-3 py-2 font-medium text-secondary-foreground whitespace-nowrap">
-                    Last Name
-                  </th>
-                  <th className="px-3 py-2 font-medium text-secondary-foreground whitespace-nowrap">
-                    Email
-                  </th>
-                  <th className="px-3 py-2 font-medium text-secondary-foreground whitespace-nowrap">
-                    Phone
-                  </th>
-                  <th className="px-3 py-2 font-medium text-secondary-foreground whitespace-nowrap">
-                    Student ID
-                  </th>
-                  <th className="px-3 py-2 font-medium text-secondary-foreground whitespace-nowrap">
-                    Course Start
-                  </th>
-                  <th className="px-3 py-2 font-medium text-secondary-foreground whitespace-nowrap">
-                    Course End
-                  </th>
-                  <th className="px-3 py-2 font-medium text-secondary-foreground whitespace-nowrap">
-                    Reg. Date
-                  </th>
-                  <th className="px-3 py-2 font-medium text-secondary-foreground whitespace-nowrap">
-                    Payment Status
-                  </th>
-                  <th className="px-3 py-2 font-medium text-secondary-foreground whitespace-nowrap">
-                    Outstanding
-                  </th>
-                  <th className="px-3 py-2 font-medium text-secondary-foreground whitespace-nowrap">
-                    Cycle #
-                  </th>
-                  <th className="px-3 py-2 font-medium text-secondary-foreground whitespace-nowrap">
-                    Roadmap
-                  </th>
-                  <th className="px-3 py-2 font-medium text-secondary-foreground whitespace-nowrap">
-                    AFK
-                  </th>
-                  <th className="px-3 py-2 font-medium text-secondary-foreground whitespace-nowrap">
-                    ACJ
-                  </th>
-                  <th className="px-3 py-2 font-medium text-secondary-foreground whitespace-nowrap">
-                    Exam Date
-                  </th>
+                  {[
+                    { key: 'seatNumber', label: 'Seat #' },
+                    { key: 'firstName', label: 'First Name' },
+                    { key: 'lastName', label: 'Last Name' },
+                    { key: 'email', label: 'Email' },
+                    { key: 'phone', label: 'Phone' },
+                    { key: 'studentId', label: 'Student ID' },
+                    { key: 'courseStartDate', label: 'Course Start' },
+                    { key: 'courseEndDate', label: 'Course End' },
+                    { key: 'registrationDate', label: 'Reg. Date' },
+                    { key: 'paymentStatus', label: 'Payment Status' },
+                    { key: 'outstanding', label: 'Outstanding' },
+                    { key: 'cycleCount', label: 'Cycle #' },
+                    { key: 'hasRoadmap', label: 'Roadmap' },
+                    { key: 'hasAFK', label: 'AFK' },
+                    { key: 'hasACJ', label: 'ACJ' },
+                    { key: 'examDate', label: 'Exam Date' },
+                  ].map(({ key, label }) => (
+                    <th
+                      key={key}
+                      onClick={() => handleSort(key)}
+                      className="px-3 py-2 font-medium text-secondary-foreground whitespace-nowrap cursor-pointer select-none hover:text-foreground transition-colors"
+                    >
+                      <span className="inline-flex items-center gap-1">
+                        {label}
+                        {sortColumn === key ? (
+                          <svg
+                            className="w-3 h-3"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d={sortDirection === 'asc' ? 'M5 15l7-7 7 7' : 'M19 9l-7 7-7-7'}
+                            />
+                          </svg>
+                        ) : (
+                          <svg
+                            className="w-3 h-3 opacity-30"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
+                            />
+                          </svg>
+                        )}
+                      </span>
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/50">
-                {filteredRows.map((row) => (
+                {sortedRows.map((row) => (
                   <tr key={row.contactId} className="hover:bg-muted">
                     <td className="px-3 py-2 text-foreground font-medium">{row.seatNumber}</td>
                     <td className="px-3 py-2 text-foreground">{row.firstName}</td>

@@ -191,6 +191,16 @@ export async function fetchRegistrationAnalytics(year, shift, cycleId = null) {
   return res.data.data;
 }
 
+// --- Student History endpoints ---
+
+export async function fetchStudentHistory({ contactId, name }) {
+  const params = {};
+  if (contactId) params.contactId = contactId;
+  if (name) params.name = name;
+  const res = await axios.get(`${API_BASE}/api/v1/history`, { params });
+  return res.data.data;
+}
+
 // --- HubSpot Contact endpoints (unchanged) ---
 
 export async function searchContacts(query, limit = 10) {

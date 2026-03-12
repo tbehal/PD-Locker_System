@@ -155,7 +155,11 @@ async function getRegistrationAnalytics(
 
   const paymentCounts = new Map<string, number>();
   for (const row of deduped) {
-    const status = row.paymentStatus || 'Unknown';
+    let status = row.paymentStatus || 'Unknown';
+    const pctMatch = status.match(/^(\d+)%/);
+    if (pctMatch && pctMatch[1] !== '100') {
+      status = 'Partially Paid';
+    }
     paymentCounts.set(status, (paymentCounts.get(status) ?? 0) + 1);
   }
   const paymentDistribution = Array.from(paymentCounts.entries())

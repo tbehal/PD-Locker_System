@@ -1,5 +1,26 @@
 # Changelog
 
+## v2.11.1 — Deposit Code Support for Registration List (2026-03-06)
+
+Neutral course codes (without `-AM`/`-PM` suffix, e.g. `NDECC April 2026 Roadmap Deposit`) are now included in the **PM shift only** instead of being dropped when shift-specific codes exist.
+
+### Modified Files
+
+| File                                                     | What Changed                                                                                                                                   |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `backend/src/services/registrationService.ts`            | `filterShiftCodes()` now classifies codes into shift-specific (AM/PM) and neutral. Neutral codes are included in PM only to avoid duplication. |
+| `backend/__tests__/services/registrationService.test.js` | Updated tests to reflect neutral-codes-to-PM-only behavior.                                                                                    |
+
+### Shift Code Classification
+
+| Code Type                 | Example                            | AM       | PM       |
+| ------------------------- | ---------------------------------- | -------- | -------- |
+| AM-specific (`-AM`/`_AM`) | `NDC-Mis5-Clinical-AM`             | Included | Excluded |
+| PM-specific (`-PM`/`_PM`) | `NDC-Mis5-Clinical-PM`             | Excluded | Included |
+| Neutral (no suffix)       | `NDECC April 2026 Roadmap Deposit` | Excluded | Included |
+
+---
+
 ## v2.11.0 — Performance & Bundle Optimization (2026-03-03)
 
 Final remediation phase (Phase 10). Lazy-loaded route components, vendor chunk splitting, and centralized debounce hook. Initial JS bundle reduced from ~890KB to ~450KB.

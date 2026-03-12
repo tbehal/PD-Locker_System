@@ -19,6 +19,10 @@ export function getChartColors() {
     danger: getCSSVariable('chart-danger'),
     purple: getCSSVariable('chart-purple'),
     muted: getCSSVariable('chart-muted'),
+    teal: getCSSVariable('chart-teal'),
+    rose: getCSSVariable('chart-rose'),
+    orange: getCSSVariable('chart-orange'),
+    sky: getCSSVariable('chart-sky'),
   };
 }
 

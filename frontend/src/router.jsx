@@ -9,6 +9,7 @@ import { SkeletonTable } from './components/ui/SkeletonTable';
 const ScheduleView = lazy(() => import('./components/ScheduleView'));
 const RegistrationList = lazy(() => import('./components/RegistrationList'));
 const AnalyticsDashboard = lazy(() => import('./components/AnalyticsDashboard'));
+const StudentHistory = lazy(() => import('./components/StudentHistory'));
 
 function ScheduleFallback() {
   return (
@@ -38,6 +39,23 @@ function RegistrationFallback() {
         </div>
       </div>
       <SkeletonTable rows={10} columns={8} />
+    </div>
+  );
+}
+
+function StudentHistoryFallback() {
+  return (
+    <div className="p-6 space-y-4">
+      <div className="bg-card border border-border rounded-lg p-4 space-y-3">
+        <Skeleton className="h-8 w-48" />
+        <div className="flex gap-2">
+          <Skeleton className="h-9 w-40" />
+          <Skeleton className="h-9 w-40" />
+        </div>
+        <Skeleton className="h-10 w-full" />
+      </div>
+      <Skeleton className="h-12 w-full rounded-lg" />
+      <SkeletonTable rows={5} columns={6} />
     </div>
   );
 }
@@ -99,6 +117,16 @@ export const router = createBrowserRouter([
           <ErrorBoundary>
             <Suspense fallback={<RegistrationFallback />}>
               <RegistrationList />
+            </Suspense>
+          </ErrorBoundary>
+        ),
+      },
+      {
+        path: 'student-history',
+        element: (
+          <ErrorBoundary>
+            <Suspense fallback={<StudentHistoryFallback />}>
+              <StudentHistory />
             </Suspense>
           </ErrorBoundary>
         ),

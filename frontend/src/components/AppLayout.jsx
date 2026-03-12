@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Outlet, NavLink, Navigate, useNavigate } from 'react-router-dom';
+import { Outlet, NavLink, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useScheduleStore } from '../stores/scheduleStore';
 import {
@@ -11,6 +11,7 @@ import {
 } from '../hooks/useCycles';
 import { checkAuth, logout } from '../api';
 import CycleTabs from './CycleTabs';
+import ViewToggle from './ViewToggle';
 import { DarkModeToggle } from './DarkModeToggle';
 import { Skeleton } from './ui/Skeleton';
 
@@ -20,6 +21,7 @@ export default function AppLayout() {
   const resetSchedule = useScheduleStore((s) => s.reset);
   const navigate = useNavigate();
 
+  const { pathname } = useLocation();
   const { data: cycles = [] } = useCycles({ enabled: authenticated === true });
   const createCycleMutation = useCreateCycle();
   const deleteCycleMutation = useDeleteCycle();
@@ -111,11 +113,8 @@ export default function AppLayout() {
           </div>
           <div className="flex items-center gap-4">
             <nav aria-label="Main navigation" className="flex items-center gap-4">
-              <NavLink to="/schedule" className={navLinkClass}>
-                Schedule
-              </NavLink>
-              <NavLink to="/registration" className={navLinkClass}>
-                Registration
+              <NavLink to="/student-history" className={navLinkClass}>
+                Student History
               </NavLink>
               <NavLink to="/analytics" className={navLinkClass}>
                 Analytics
@@ -143,6 +142,12 @@ export default function AppLayout() {
             onUnlockCycle={handleUnlockCycle}
           />
         </div>
+
+        {(pathname === '/schedule' || pathname === '/registration') && (
+          <div className="mb-4">
+            <ViewToggle />
+          </div>
+        )}
 
         <main>
           <Outlet />

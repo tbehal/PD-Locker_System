@@ -207,34 +207,6 @@ export default function AvailabilityGrid({
           </div>
         </div>
 
-        {/* Drag selection toolbar */}
-        {selectedCells.length > 0 && !locked && (
-          <div className="mt-3 p-2 bg-warning-muted border border-warning/30 rounded-md flex items-center justify-between gap-2">
-            <div className="text-sm text-foreground">
-              {selectionMode === 'book' ? 'Selected available weeks' : 'Selected booked weeks'}:{' '}
-              {selectedCells.length}
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={confirmSelection}
-                className={`px-3 py-1 rounded-md text-primary-foreground text-sm font-medium ${
-                  selectionMode === 'book'
-                    ? 'bg-primary hover:bg-primary/90'
-                    : 'bg-destructive hover:bg-destructive/90'
-                }`}
-              >
-                {selectionMode === 'book' ? 'Book Selected' : 'Clear Selected'}
-              </button>
-              <button
-                onClick={clearSelection}
-                className="px-3 py-1 rounded-md bg-secondary text-foreground text-sm font-medium hover:bg-secondary/80"
-              >
-                Cancel Selection
-              </button>
-            </div>
-          </div>
-        )}
-
         {searchQuery && (
           <p className="text-sm text-muted-foreground">
             Found {filteredGrid.length} station(s) with "{searchQuery}"
@@ -423,6 +395,36 @@ export default function AvailabilityGrid({
           </tbody>
         </table>
       </div>
+
+      {/* Sticky bottom selection toolbar */}
+      {selectedCells.length > 0 && !locked && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-card border-t border-border shadow-lg">
+          <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+            <div className="text-sm font-medium text-foreground">
+              {selectionMode === 'book' ? 'Selected available weeks' : 'Selected booked weeks'}:{' '}
+              <span className="font-bold">{selectedCells.length}</span>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={confirmSelection}
+                className={`px-4 py-2 rounded-md text-primary-foreground text-sm font-medium ${
+                  selectionMode === 'book'
+                    ? 'bg-primary hover:bg-primary/90'
+                    : 'bg-destructive hover:bg-destructive/90'
+                }`}
+              >
+                {selectionMode === 'book' ? 'Book Selected' : 'Clear Selected'}
+              </button>
+              <button
+                onClick={clearSelection}
+                className="px-4 py-2 rounded-md bg-secondary text-foreground text-sm font-medium hover:bg-secondary/80"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showClearConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/50">

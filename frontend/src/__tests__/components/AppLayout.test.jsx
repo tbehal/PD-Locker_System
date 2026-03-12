@@ -25,6 +25,15 @@ vi.mock('../../components/DarkModeToggle', () => ({
   DarkModeToggle: () => <div data-testid="dark-mode-toggle">Toggle</div>,
 }));
 
+vi.mock('../../components/ViewToggle', () => ({
+  default: () => (
+    <div data-testid="view-toggle">
+      <button>Schedule</button>
+      <button>Registration</button>
+    </div>
+  ),
+}));
+
 vi.mock('../../components/ui/Skeleton', () => ({
   Skeleton: ({ className }) => <div data-testid="skeleton" className={className} />,
 }));
@@ -49,8 +58,8 @@ describe('AppLayout', () => {
     renderWithProviders(<AppLayout />, { authenticated: true, route: '/schedule' });
 
     expect(screen.getByText('Lab Availability Manager')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /schedule/i })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /registration/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /schedule/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /registration/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /analytics/i })).toBeInTheDocument();
   });
 

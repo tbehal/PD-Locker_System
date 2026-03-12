@@ -79,7 +79,7 @@ describe('getRegistrationList', () => {
     expect(result).toEqual(mockResult);
   });
 
-  test('uses all codes when no shift-specific codes match', async () => {
+  test('neutral codes (no shift indicator) are included only in PM shift', async () => {
     mockPrisma.cycle.findUnique.mockResolvedValueOnce({
       id: 2,
       name: 'Cycle 2 - 2026',
@@ -88,16 +88,17 @@ describe('getRegistrationList', () => {
 
     const mockResult = {
       rows: [],
-      meta: { totalStudents: 0, shift: 'AM', fetchedAt: '2026-01-01' },
+      meta: { totalStudents: 0, shift: 'PM', fetchedAt: '2026-01-01' },
     };
     hubspot.buildRegistrationList.mockResolvedValueOnce(mockResult);
 
-    await registrationService.getRegistrationList(2, 'AM', false);
+    await registrationService.getRegistrationList(2, 'PM', false);
 
+    // Neutral codes go to PM only
     expect(hubspot.buildRegistrationList).toHaveBeenCalledWith(
       ['CODE1', 'CODE2'],
-      'AM',
-      '2_AM',
+      'PM',
+      '2_PM',
     );
   });
 
@@ -136,7 +137,7 @@ describe('getRegistrationList', () => {
   });
 
   test('does not false-match codes that end in AM but lack a separator', async () => {
-    // 'EXAM-PREP' should NOT be matched as an AM code — endsWith('AM') was too greedy
+    // 'EXAM-PREP' has no -AM/-PM suffix — neutral codes only go to PM shift
     mockPrisma.cycle.findUnique.mockResolvedValueOnce({
       id: 5,
       name: 'Cycle 5 - 2026',
@@ -150,7 +151,7 @@ describe('getRegistrationList', () => {
 
     await registrationService.getRegistrationList(5, 'AM', false);
 
-    // Only 'NDC-AM' should be passed — 'EXAM-PREP' must be excluded
+    // 'NDC-AM' is shift-specific, 'EXAM-PREP' is neutral — excluded from AM
     expect(hubspot.buildRegistrationList).toHaveBeenCalledWith(
       ['NDC-AM'],
       'AM',

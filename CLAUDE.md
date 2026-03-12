@@ -220,6 +220,7 @@ Always check lock state in the service layer before mutating.
 - Rate limit: 90 req/10sec (HubSpot's limit). Use batch APIs (v3/v4) whenever possible
 - In-memory caches: deal stages (5 min), registration lists (60 sec)
 - Registration list building uses batch association chains: line_items → deals → contacts
+- **Shift code filtering:** Codes with `-AM`/`_AM` → AM only, `-PM`/`_PM` → PM only. Neutral codes (no shift suffix, e.g. deposit codes like `NDECC April 2026 Roadmap Deposit`) → PM shift only. Logic in `filterShiftCodes()` in `registrationService.ts`.
 
 ### Database
 

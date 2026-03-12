@@ -18,6 +18,7 @@ import bookingsRouter from './routes/bookings';
 import contactsRouter from './routes/contacts';
 import registrationRouter from './routes/registration';
 import analyticsRouter from './routes/analytics';
+import historyRouter from './routes/history';
 import authRouter from './routes/auth';
 
 const app = express();
@@ -29,7 +30,12 @@ app.use(helmet());
 const allowedOrigins =
   config.nodeEnv === 'production'
     ? ([process.env['FRONTEND_URL']].filter(Boolean) as string[])
-    : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000'];
+    : [
+        'http://localhost:5173',
+        'http://localhost:5174',
+        'http://localhost:5175',
+        'http://localhost:3000',
+      ];
 
 app.use(
   cors({
@@ -127,6 +133,7 @@ v1.use('/availability', gridRouter);
 v1.use('/availability', bookingsRouter);
 v1.use('/availability', contactsRouter);
 v1.use('/analytics', analyticsRouter);
+v1.use('/history', historyRouter);
 app.use('/api/v1', requireAuth, v1);
 
 // Global error handler (must be last)

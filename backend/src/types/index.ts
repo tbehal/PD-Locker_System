@@ -111,6 +111,22 @@ export interface RegistrationAnalyticsResult {
   warnings: RegistrationWarning[];
 }
 
+// --- Student History Types ---
+export interface HistoryBookingEntry {
+  lab: string;
+  stationNumber: number;
+  side: string;
+  shift: string;
+  week: number;
+  startDate: string | null;
+  endDate: string | null;
+}
+
+export interface HistoryCycleGroup {
+  cycle: { id: number; name: string; year: number; number: number };
+  bookings: HistoryBookingEntry[];
+}
+
 // --- Respond helpers ---
 export interface Respond {
   ok: (

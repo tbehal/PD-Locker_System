@@ -36,6 +36,7 @@ vi.mock('recharts', () => {
     PieChart: MockChart,
     Pie: () => null,
     Cell: () => null,
+    LabelList: () => null,
   };
 });
 
@@ -51,6 +52,10 @@ vi.mock('../../lib/chartTheme', () => ({
     danger: '#ef4444',
     purple: '#a855f7',
     muted: '#6b7280',
+    teal: '#14b8a6',
+    rose: '#f43f5e',
+    orange: '#ea580c',
+    sky: '#38bdf8',
   }),
   getAxisStyle: () => ({
     tick: { fill: '#6b7280' },

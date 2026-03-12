@@ -3,6 +3,18 @@
 @tailwind utilities;
 
 @layer base {
+  input,
+  select,
+  textarea {
+    background-color: rgb(var(--card));
+    color: rgb(var(--card-foreground));
+  }
+
+  option {
+    background-color: rgb(var(--card));
+    color: rgb(var(--card-foreground));
+  }
+
   :root {
     --background: 249 250 251;
     --foreground: 17 24 39;
@@ -47,6 +59,10 @@
     --chart-danger: 239 68 68;
     --chart-purple: 139 92 246;
     --chart-muted: 107 114 128;
+    --chart-teal: 20 184 166;
+    --chart-rose: 244 63 94;
+    --chart-orange: 234 88 12;
+    --chart-sky: 56 189 248;
   }
 
   .dark {
@@ -93,6 +109,10 @@
     --chart-danger: 248 113 113;
     --chart-purple: 167 139 250;
     --chart-muted: 148 163 184;
+    --chart-teal: 45 212 191;
+    --chart-rose: 251 113 133;
+    --chart-orange: 251 146 60;
+    --chart-sky: 125 211 252;
   }
 }
 
